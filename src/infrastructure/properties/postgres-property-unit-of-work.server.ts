@@ -194,13 +194,19 @@ class PostgresPropertyTransaction implements PropertyTransaction {
     const result = await this.client.query<{
       canonical_route_ready: boolean;
       public_facts_ready: boolean;
+      media_ready: boolean;
     }>(
       `select
         p.current_route_reservation_id is not null and p.current_slug is not null as canonical_route_ready,
         btrim(p.title) <> '' and p.price_amount_minor is not null and p.currency_code is not null
           and lt.status='active' and lt.deleted_at is null
           and pt.status='active' and pt.deleted_at is null
-          and l.status='active' and l.deleted_at is null as public_facts_ready
+          and l.status='active' and l.deleted_at is null as public_facts_ready,
+        exists(select 1 from public.property_media pm where pm.property_id=p.id and pm.is_cover
+          and pm.state='READY' and pm.visibility='PUBLIC' and pm.deleted_at is null
+          and pm.ready_at is not null and exists(select 1 from public.property_media_variants v
+            where v.property_media_id=pm.id and v.source_version=pm.source_version
+              and v.recipe_version=pm.current_recipe_version and v.purged_at is null)) as media_ready
        from public.properties p
        join public.listing_types lt on lt.id=p.listing_type_id
        join public.property_types pt on pt.id=p.property_type_id
@@ -212,8 +218,7 @@ class PostgresPropertyTransaction implements PropertyTransaction {
     return {
       canonicalRouteReady: row?.canonical_route_ready ?? false,
       publicFactsReady: row?.public_facts_ready ?? false,
-      // Exact media/publication readiness remains an Open Decision. Phase 5 fails closed.
-      mediaReady: false,
+      mediaReady: row?.media_ready ?? false,
     };
   }
 

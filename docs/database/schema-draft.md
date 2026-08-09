@@ -152,6 +152,8 @@ Same retired-route shape as `property_slug_history`, with `location_id` FK repla
 
 ### `media_upload_sessions`
 
+Phase 6 adds a unique server-generated `planned_property_media_id uuid` plus observed finalization facts `uploaded_byte_size bigint`, `uploaded_checksum_sha256 text`, `uploaded_etag text`, and `uploaded_at timestamptz`. A finalized session requires the full observed fact set; checksums use lowercase SHA-256 hex.
+
 | Column | Type | Null/default | FK | Unique/check | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `id` | `uuid` | NN | — | PK | Upload capability identity |
@@ -164,6 +166,8 @@ Same retired-route shape as `property_slug_history`, with `location_id` FK repla
 | `created_at`, `updated_at`, `version` | timestamps/bigint | NN defaults as standard | — | version > 0 | No SD; expire/cancel |
 
 ### `property_media`
+
+Phase 6 adds `current_recipe_version`, `processor_version`, safe `failure_code`/`failure_retryable`, and deletion actor/reason provenance. `READY` requires current recipe/processor and successful output facts; `FAILED` requires safe failure classification; `DELETED` may occur before an original exists and requires deletion provenance.
 
 | Column | Type | Null/default | FK | Unique/check | Notes |
 | --- | --- | --- | --- | --- | --- |

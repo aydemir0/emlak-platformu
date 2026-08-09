@@ -2,8 +2,10 @@ import "server-only";
 
 import { requireStaffPrincipal } from "@/infrastructure/auth/require-staff-principal.server";
 import { PostgresPropertyReadRepository } from "@/infrastructure/properties/postgres-property-read-repository.server";
+import { PostgresMediaReadRepository } from "@/infrastructure/property-media/postgres-media-read-repository.server";
 
 const repository = new PostgresPropertyReadRepository();
+const mediaRepository = new PostgresMediaReadRepository();
 
 import type { PropertyListQuery } from "@/application/properties/property-ports";
 
@@ -32,11 +34,12 @@ export async function getPropertyReferenceData() {
 
 export async function getPropertyEditorData(propertyId: string) {
   const actor = await requireStaffPrincipal();
-  const [property, references] = await Promise.all([
+  const [property, references, media] = await Promise.all([
     repository.get(actor, propertyId),
     repository.getReferenceData(),
+    mediaRepository.listAdminPropertyMedia(actor, propertyId),
   ]);
-  return { property, references };
+  return { property, references, media };
 }
 
 export async function getPropertyListPageData(

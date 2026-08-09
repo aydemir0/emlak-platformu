@@ -53,6 +53,6 @@ type Equal<A, B> =
     : false;
 type Assert<T extends true> = T;
 
-export type DatabaseTablesMatchPhaseFive = Assert<
+export type DatabaseTablesMatchPhaseSix = Assert<
   Equal<keyof Database["public"]["Tables"], ExpectedTableNames>
 >;

@@ -1192,9 +1192,14 @@ export type Database = {
           initiated_by_user_identity_id: string
           maximum_bytes: number
           object_key: string
+          planned_property_media_id: string
           property_id: string
           status: string
           updated_at: string
+          uploaded_at: string | null
+          uploaded_byte_size: number | null
+          uploaded_checksum_sha256: string | null
+          uploaded_etag: string | null
           version: number
         }
         Insert: {
@@ -1208,9 +1213,14 @@ export type Database = {
           initiated_by_user_identity_id: string
           maximum_bytes: number
           object_key: string
+          planned_property_media_id?: string
           property_id: string
           status?: string
           updated_at?: string
+          uploaded_at?: string | null
+          uploaded_byte_size?: number | null
+          uploaded_checksum_sha256?: string | null
+          uploaded_etag?: string | null
           version?: number
         }
         Update: {
@@ -1224,9 +1234,14 @@ export type Database = {
           initiated_by_user_identity_id?: string
           maximum_bytes?: number
           object_key?: string
+          planned_property_media_id?: string
           property_id?: string
           status?: string
           updated_at?: string
+          uploaded_at?: string | null
+          uploaded_byte_size?: number | null
+          uploaded_checksum_sha256?: string | null
+          uploaded_etag?: string | null
           version?: number
         }
         Relationships: [
@@ -1757,13 +1772,19 @@ export type Database = {
           checksum_sha256: string | null
           created_at: string
           created_by_user_identity_id: string | null
+          current_recipe_version: string | null
           deleted_at: string | null
+          deleted_by_user_identity_id: string | null
+          deletion_reason_code: string | null
           detected_mime_type: string | null
+          failure_code: string | null
+          failure_retryable: boolean | null
           height_px: number | null
           id: string
           is_cover: boolean
           media_role: string
           original_object_key: string | null
+          processor_version: string | null
           property_id: string
           purged_at: string | null
           ready_at: string | null
@@ -1784,13 +1805,19 @@ export type Database = {
           checksum_sha256?: string | null
           created_at?: string
           created_by_user_identity_id?: string | null
+          current_recipe_version?: string | null
           deleted_at?: string | null
+          deleted_by_user_identity_id?: string | null
+          deletion_reason_code?: string | null
           detected_mime_type?: string | null
+          failure_code?: string | null
+          failure_retryable?: boolean | null
           height_px?: number | null
           id?: string
           is_cover?: boolean
           media_role: string
           original_object_key?: string | null
+          processor_version?: string | null
           property_id: string
           purged_at?: string | null
           ready_at?: string | null
@@ -1811,13 +1838,19 @@ export type Database = {
           checksum_sha256?: string | null
           created_at?: string
           created_by_user_identity_id?: string | null
+          current_recipe_version?: string | null
           deleted_at?: string | null
+          deleted_by_user_identity_id?: string | null
+          deletion_reason_code?: string | null
           detected_mime_type?: string | null
+          failure_code?: string | null
+          failure_retryable?: boolean | null
           height_px?: number | null
           id?: string
           is_cover?: boolean
           media_role?: string
           original_object_key?: string | null
+          processor_version?: string | null
           property_id?: string
           purged_at?: string | null
           ready_at?: string | null
@@ -1834,6 +1867,13 @@ export type Database = {
           {
             foreignKeyName: "property_media_created_by_user_identity_id_fkey"
             columns: ["created_by_user_identity_id"]
+            isOneToOne: false
+            referencedRelation: "user_identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "property_media_deleted_by_user_identity_id_fkey"
+            columns: ["deleted_by_user_identity_id"]
             isOneToOne: false
             referencedRelation: "user_identities"
             referencedColumns: ["id"]

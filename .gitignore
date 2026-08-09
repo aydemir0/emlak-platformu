@@ -40,6 +40,6 @@ Thumbs.db
 *~
 
 # Local uploads and generated media
-uploads/
-tmp/
-temp/
+/uploads/
+/tmp/
+/temp/
