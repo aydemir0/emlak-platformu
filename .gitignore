@@ -1,0 +1,45 @@
+# Dependencies
+node_modules/
+
+# Next.js and build output
+.next/
+out/
+dist/
+build/
+.turbo/
+
+# Tests and coverage
+coverage/
+playwright-report/
+test-results/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Vercel and Supabase local state
+.vercel/
+.supabase/
+supabase/.temp/
+
+# Logs and caches
+*.log
+.cache/
+.eslintcache
+*.tsbuildinfo
+
+# OS and editor files
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*~
+
+# Local uploads and generated media
+uploads/
+tmp/
+temp/
