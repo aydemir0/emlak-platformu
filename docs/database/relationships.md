@@ -103,11 +103,15 @@ These rules prevent invalid immediate edges. Cycle prevention beyond the fixed t
 
 Current routes live on `properties`, `locations`, `seo_pages`, and `content_entries` as `current_slug` plus `current_route_reservation_id`. The reservation has a permanently unique normalized `route_key`. A route change transaction:
 
+For V1 property details, the normalized route must match `/satilik|kiralik/{city}/{district}/{property-type}/{slug}`. A retired property route remains reserved and resolves with `301` directly to its aggregate's current canonical route.
+
 1. locks the aggregate and old reservation;
 2. creates/resolves the new unique reservation for the expected `route_kind`;
 3. copies the old slug/reservation into the corresponding slug-history table and retires the old reservation;
 4. updates both current fields atomically; and
 5. writes audit/outbox evidence.
+
+Each route-owning family resolves its retired slug/route with permanent `301` directly to the same semantic aggregate's current canonical route; redirect chains are forbidden.
 
 History tables contain only retired routes—no `is_current` row and no `valid_to`-as-current convention. Because PostgreSQL cannot express “exactly one of four current tables or four history tables references a reservation” with ordinary foreign keys, implementation requires a reviewed deferred constraint trigger. At commit it must prove exactly one owner reference, match `route_kind` to the owner family, require current owners to reference a non-retired reservation, and history owners to reference a retired reservation. The namespace application use case still owns the transaction and useful conflict response; the mandatory database check is the final race/integrity guard. No polymorphic owner FK is added to `public_route_reservations`.
 
@@ -126,6 +130,6 @@ History tables contain only retired routes—no `is_current` row and no `valid_t
 
 - **Open Decision:** exact `ON DELETE` actions at eventual privacy/legal purge time, after retention requirements are approved.
 - **Open Decision:** whether location soft deletion blocks while active descendants/properties exist or performs a reviewed subtree transition.
-- **Open Decision:** appointment overlap enforcement (exclusion constraint versus application lock), advisor capacity, and tentative-status semantics.
+- Same-advisor overlapping appointments are forbidden for every non-cancelled, non-deleted row and require database exclusion enforcement. Buffer duration and any future multi-advisor capacity model remain Open Decisions.
 - **Open Decision:** whether an effective lead conversion is strictly one per lead and how an audited reversal is represented.
 - **Open Decision:** whether a retired route may reactivate for the same semantic aggregate. It is never reassigned to another aggregate.

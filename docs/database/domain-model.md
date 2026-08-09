@@ -8,14 +8,15 @@ The design follows [domain boundaries](../architecture/domain-boundaries.md), [m
 
 ## Global modeling rules
 
-- **Assumption — single organization:** no `organization_id` or `tenant_id` is added. A future tenancy change requires an ADR and end-to-end migration.
+- **Decision — single organization:** V1 serves one organization. No `organization_id` or `tenant_id` is added, and V1 has no multi-tenancy. A future tenancy change requires an ADR and end-to-end migration.
 - **Assumption — identifiers:** aggregate/business records use UUID primary keys. Pure junctions use composite primary keys unless another entity must reference the relationship or it has an independent lifecycle.
 - **Assumption — time:** instants are `timestamptz` interpreted as UTC; business-calendar dates are `date`.
-- **Assumption — money:** monetary values are `bigint` minor units paired with an uppercase three-letter currency code. No floating point is used.
+- **Decision — money:** monetary values are `bigint` minor units paired with an uppercase three-letter currency code. No floating point is used.
 - **Assumption — evolving states:** lifecycle/state/type fields use `text` plus checks. PostgreSQL enums are deferred to avoid migration coupling.
 - **Assumption — lifecycle metadata:** mutable business aggregates normally carry `created_at`, `updated_at`, `version`, and `deleted_at`. Immutable events/history and pure junctions document their exceptions.
 - **Assumption — authority:** domain contracts contain no Supabase, R2, Resend, GA4, Sentry, or Vercel types. Provider identifiers and object keys are boundary metadata.
 - **Assumption — deletion:** business records are soft-deleted by default. Immutable history, audit, analytics, and completed attempt records are retained or privacy-erased under a policy; they are not casually mutated.
+- **Decision — delete/restore authorization:** V1 business-record soft delete and restore require `ADMIN`. Advisor lifecycle operations such as end, detach, cancel, dismiss, or deactivate are not delete/restore authority.
 - **Assumption — JSON:** `jsonb` is used only for versioned, bounded payloads or genuinely evolving configuration. Known queried relationships remain relational.
 - **Assumption — authorization:** application use cases authorize action plus object from trusted state. RLS is a deny-by-default second boundary on every exposed/client-accessible relation.
 
@@ -38,9 +39,10 @@ The design follows [domain boundaries](../architecture/domain-boundaries.md), [m
 ### Identity and access
 
 - `user_identities` maps a stable application principal to one external authentication subject. The provider subject is integration metadata, not a foreign key used throughout the domain.
-- Roles bundle permissions; user-role assignment is the trusted current-grant source. Absence of an explicit grant denies access.
+- V1 staff roles are exactly `ADMIN` and `ADVISOR`. Roles bundle controlled permissions; user-role assignment is the trusted current-grant source, and absence of an explicit grant denies access.
 - Advisor profiles are optional business profiles linked one-to-zero-or-one to an identity. Disabling identity access does not delete advisor or historical business records.
-- **Open Decision:** launch role/permission bundles, object scopes, customer accounts, MFA/recent-authentication, and offboarding service levels.
+- V1 has no customer or other public account. Public accounts are deferred to V2 and no identity-to-customer authorization relationship is introduced in V1.
+- Admin MFA is mandatory before production. Advisor MFA is optional at launch; recent-authentication, offboarding service levels, and the precise permission bundles/object scopes remain Open Decisions.
 
 ### Properties, taxonomy, and location
 
@@ -57,25 +59,27 @@ The design follows [domain boundaries](../architecture/domain-boundaries.md), [m
 - A media record progresses through explicit technical states. Only `ready`, non-deleted, visible media belonging to a public-eligible property may be delivered.
 - PostgreSQL stores authoritative keys, checksums, dimensions, attempts, recipe versions, and lifecycle timestamps. It never infers readiness from R2 object presence.
 - Variants are immutable and versioned. Processing attempts are append-only operational evidence. Old attempts cannot publish over a newer source/recipe version.
-- **Open Decision:** formats, size/dimension limits, malware controls, recipe sets, processing runtime, retry/lease policy, restore/retention/legal-hold periods, and hard delivery-revocation SLO.
+- R2 stores media bytes. Public responsive variants are immutable, versioned, and generated in WebP and AVIF.
+- **Open Decision:** approved input formats, exact responsive recipes/fallbacks, size/dimension limits, malware controls, processing runtime, retry/lease policy, restore windows, legal retention periods, and hard delivery-revocation SLO.
 
 ### CRM, requests, appointments, and matching
 
 - Leads, customers, and customer requests are separate lifecycles. A conversion explicitly links a lead to a customer and preserves acquisition history.
 - Customer contact points normalize email/phone values for deduplication while retaining display values. Access, merge, export, deletion, and erasure are sensitive and audited.
 - A customer may hold multiple requests; each request has its own status, criteria, consent/purpose context, and feature requirements.
-- Appointments link the relevant customer and optionally a property/request/advisor. Time-window and status invariants are enforced; conflict semantics remain a product decision.
+- Appointments link the relevant customer and optionally a property/request/advisor. For appointments with an advisor, overlapping half-open time ranges are forbidden across every non-`CANCELLED`, non-deleted row; `REQUESTED` reserves time and there is no V1 administrator bypass.
 - Matches link a property to a customer request and record explainable reasons. They never become authoritative availability, pricing, or qualification decisions.
-- **Open Decision:** deduplication/merge policy, lawful-basis and consent evidence, retention/erasure periods, appointment conflict/capacity rules, and whether automated matches require staff review.
+- **Open Decision:** deduplication/merge policy, lawful-basis and consent evidence, configurable retention/erasure periods, appointment buffer duration/future multi-advisor scheduling, and whether automated matches require staff review.
 
 ### SEO and content
 
 - SEO pages are curated records with one bounded query definition, explicit approval/publication state, canonical slug, and indexability policy. Arbitrary filter combinations never become records automatically.
 - `properties`, `locations`, `seo_pages`, and `content_entries` each hold `current_slug` plus `current_route_reservation_id`. Their slug-history tables contain retired routes only. `public_route_reservations.route_key` is permanently globally unique across all four families. A mandatory deferred database constraint verifies exactly one type-consistent current-or-history owner at commit, protecting collisions and ambiguous ownership without a polymorphic owner FK.
-- A route change reserves the new normalized path, moves the old slug/reservation to the owning history table, retires that old reservation, and updates the aggregate current-route pair in one transaction. Historical routes resolve deterministically without redirect chains.
+- A route change reserves the new normalized path, moves the old slug/reservation to the owning history table, retires that old reservation, and updates the aggregate current-route pair in one transaction. Every old slug/route resolves with permanent `301` directly to its semantic owner's current canonical route, without redirect chains.
+- The V1 canonical property-detail taxonomy is `/satilik|kiralik/{city}/{district}/{property-type}/{slug}`. Every retired property slug/route resolves with a permanent `301` redirect to the current canonical route.
 - SEO page features constrain a curated query by controlled vocabulary; location constraints are explicit IDs in the query definition, never strings.
 - Content entries are editorial aggregates with independent publication and slug history. Verified domain facts remain owned by their source domains.
-- **Open Decision:** canonical route taxonomy, facet allowlist, inventory/content thresholds, approval roles, pagination policy, and lifecycle-specific redirect/404/410 behavior.
+- **Open Decision:** slug normalization details, facet allowlist, inventory/content thresholds, pagination policy, and lifecycle behavior when no equivalent current property route exists.
 
 ### Analytics, audit, outbox, and settings
 
@@ -90,7 +94,7 @@ The design follows [domain boundaries](../architecture/domain-boundaries.md), [m
 - A state change, its required history row, audit evidence, and necessary outbox intent commit atomically.
 - External calls and cache invalidation happen after commit. At-least-once consumers use stable idempotency keys.
 - Human-edited aggregates use optimistic `version` checks. Contended order, conversion, appointment, slug, and outbox-claim invariants use narrow locks and database constraints where needed.
-- Restore is an authorized use case. It revalidates identifiers and current parents, and never silently revives assignments, public delivery, publication, or stale permissions.
+- Restore is an `ADMIN`-only use case. It revalidates identifiers and current parents, and never silently revives assignments, public delivery, publication, or stale permissions.
 - Public reads always constrain current publication, deletion, media readiness/eligibility, and SEO indexability from authoritative state.
 
 ## Deliberate extension points, not V1 schema

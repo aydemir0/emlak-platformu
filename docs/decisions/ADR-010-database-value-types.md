@@ -1,6 +1,6 @@
 # ADR-010: Database identifier, money, and time value types
 
-- **Status:** Proposed
+- **Status:** Accepted
 - **Date:** 2026-08-09
 
 ## Context

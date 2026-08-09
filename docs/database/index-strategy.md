@@ -126,7 +126,7 @@ Do not add one composite index per room count, floor, heating type, view, map bo
 | `customers` | `(assigned_advisor_id, updated_at desc, id desc)` where active | Advisor CRM work list |
 | `customer_requests` | `(customer_id, status, updated_at desc, id desc)` where active | Customer request list |
 | `customer_activities` | `(customer_id, occurred_at desc, id desc)` | CRM timeline/keyset pagination |
-| `appointments` | `(advisor_id, starts_at, id)` where active/blocking as approved | Advisor calendar and collision precheck |
+| `appointments` | `(advisor_id, starts_at, id)` where non-cancelled and non-deleted | Advisor calendar and collision precheck |
 | `appointments` | `(customer_id, starts_at desc, id desc)` where active | Customer appointment history |
 | `property_customer_matches` | `(customer_request_id, status, score desc, id)` where active | Request recommendations with stable order |
 | `property_customer_matches` | `(property_id, status, created_at desc, id desc)` where active | Property-side candidate list |
@@ -137,15 +137,15 @@ Every remaining foreign key receives a narrow B-tree index if it is not the left
 
 ## Appointment exclusion
 
-If the product confirms that an advisor cannot hold overlapping appointments in selected blocking states, add a partial GiST exclusion constraint conceptually on:
+V1 requires a partial GiST exclusion constraint conceptually on:
 
 ```text
 advisor_id WITH equality,
 half-open range [starts_at, ends_at) WITH overlap
-WHERE row is active and status is blocking
+WHERE advisor is present, row is not deleted, and status is not CANCELLED
 ```
 
-This may require a supported operator extension for UUID equality and must be verified against the target Supabase/PostgreSQL environment. It is not created until blocking states, buffers, overrides, and tentative behavior are approved. The B-tree calendar index remains useful for reads even when exclusion is enabled.
+This may require a supported operator extension for UUID equality and must be verified against the target Supabase/PostgreSQL environment before migration implementation. Requested appointments reserve time and there is no V1 administrator bypass. The B-tree calendar index remains useful for reads even when exclusion is enabled.
 
 ## RLS and authorization indexes
 
@@ -200,6 +200,6 @@ Restore commands query the same unique predicate and fail without displacing the
 
 - Approved public filter/query families and their traffic/selectivity expectations.
 - Customer contact uniqueness rules after normalization and verification policy are defined.
-- Appointment overlap/buffer policy and GiST extension availability.
+- Appointment buffer duration, any future multi-advisor scheduling model, and GiST extension availability. Same-advisor overlap prevention is locked.
 - Whether full-text, spatial, JSON containment, BRIN, or partitioning is justified by measured requirements.
 - Retention volumes that may require partitioning or specialized purge indexes.

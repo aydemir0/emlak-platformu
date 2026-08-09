@@ -2,7 +2,7 @@
 
 ## Purpose
 
-Define the lifecycle contract for soft deletion, restoration, privacy erasure, retention, and hard purge across the canonical data model. Numeric periods are deliberately not invented; product, legal, regulatory, backup, SEO, and operational owners must approve them before implementation. Authorization follows the [authorization matrix](authorization-matrix.md) and [RLS design](rls-design.md).
+Define the lifecycle contract for soft deletion, restoration, privacy erasure, retention, and hard purge across the canonical data model. Retention durations are configuration, not hard-coded business constants. Numeric periods are deliberately not invented; product, legal, regulatory, backup, SEO, and operational owners must approve them before implementation. Authorization follows the [authorization matrix](authorization-matrix.md) and [RLS design](rls-design.md).
 
 ## Data classification
 
@@ -21,11 +21,12 @@ Classification follows content, not only table name. Free text, JSON, error deta
 ## Universal lifecycle rules
 
 - Business records are soft-deleted when recoverability is required. `deleted_at is null` is the default active predicate; sensitive deletions also record actor, reason, and correlation/audit evidence without copying unnecessary PII.
-- Delete and restore are application use cases, not ad hoc updates. They re-check current permission, state, references, uniqueness, and child behavior in one defined transaction boundary.
+- Delete and restore are `ADMIN`-only application use cases in V1, not ad hoc updates. They re-check current permission, state, references, uniqueness, and child behavior in one defined transaction boundary. Advisor end, detach, cancel, dismiss, and deactivate actions are separate lifecycle commands, not delete/restore authority.
 - Soft deletion immediately removes the record from public/admin ordinary reads, shared caches, sitemaps, matches, assignments, and delivery eligibility as applicable. It is not privacy erasure.
 - Normal application actors cannot hard-delete business records. A privileged, bounded, idempotent purge verifies retention expiry, reference rules, erasure status, backup policy, and legal hold, then records non-sensitive evidence.
 - Append-only history, audit, analytics, and outbox rows are not casually soft-deleted. They follow their own minimized retention/purge policies and never preserve forbidden PII merely because they are evidence.
 - Foreign-key cascades are not assumed. Each family below declares whether children hide, detach, independently soft-delete, remain as minimized history, or purge with the parent.
+- Every configurable retention value has a documented owner, data class, environment-independent meaning, effective date/version, minimum/maximum validation, audit trail, and safe fallback. Configuration cannot shorten a legal hold or silently override an applicable legal minimum.
 
 ## Soft-delete uniqueness and restore contract
 
@@ -99,6 +100,6 @@ Audit and analytics require special handling. Audit evidence is append-only to n
 - Which business identifiers can be reused after soft deletion and which remain permanently reserved.
 - Detailed property/location child behavior, SEO outcome, and media retention after property deletion.
 - Whether any audit/history facts must be retained, anonymized, or exceptionally erased under applicable law.
-- Customer-account scope and verified identity-linking/erasure workflow.
+- V2 customer-account identity-linking, recovery, and erasure workflow; V1 has no customer/public account.
 - Legal-hold authority, review cadence, release procedure, and how holds are represented without broadening access.
 - Backup provider topology, recovery objectives, tombstone replay mechanism, and proof of final destruction.

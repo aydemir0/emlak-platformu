@@ -39,7 +39,7 @@ This is a non-executable column catalog for the 44-table model. It intentionally
 | Column | Type | Null/default | FK | Unique/check | Notes |
 | --- | --- | --- | --- | --- | --- |
 | `id` | `uuid` | NN | — | PK | — |
-| `code`, `name` | `text` | NN | — | `code` unique; normalized/nonblank | Stable policy code and label |
+| `code`, `name` | `text` | NN | — | `code` unique and checked `ADMIN/ADVISOR`; normalized/nonblank | V1 role allowlist; stable policy code and label |
 | `description` | `text` | NULL | — | bounded | — |
 | `status` | `text` | NN default `'active'` | — | `active/inactive` | — |
 | `created_at`, `updated_at`, `version`, `deleted_at` | standard mutable metadata | — | — | — | — |
@@ -172,7 +172,7 @@ Same retired-route shape as `property_slug_history`, with `location_id` FK repla
 
 ### `property_media_variants`
 
-`id uuid` NN PK; `property_media_id uuid` NN FK; `source_version integer` NN > 0; `recipe_version text` NN; `format text` NN checked approved raster formats; `width_px integer`, `height_px integer`, `byte_size bigint` NN and positive; `object_key text` NN unique; `checksum_sha256 text` NN; `created_at timestamptz` NN default now(); `purged_at timestamptz` NULL. Unique `(property_media_id,source_version,recipe_version,width_px,format)`. Immutable except purge evidence.
+`id uuid` NN PK; `property_media_id uuid` NN FK; `source_version integer` NN > 0; `recipe_version text` NN; `format text` NN checked `WEBP/AVIF`; `width_px integer`, `height_px integer`, `byte_size bigint` NN and positive; `object_key text` NN unique R2 key; `checksum_sha256 text` NN; `created_at timestamptz` NN default now(); `purged_at timestamptz` NULL. Unique `(property_media_id,source_version,recipe_version,width_px,format)`. Variants are immutable except purge evidence.
 
 ### `media_processing_attempts`
 
@@ -250,7 +250,7 @@ Same retired-route shape as `property_slug_history`, with `location_id` FK repla
 | `status`, `appointment_type` | `text` | NN | — | status is `REQUESTED/CONFIRMED/CANCELLED/COMPLETED/NO_SHOW`; type checked | Proposed pending product approval |
 | `location_note`, `notes` | `text` | NULL | — | bounded; sensitive | No provider calendar type |
 | `idempotency_key` | `uuid` | NULL | — | unique when present | — |
-| `created_at`, `updated_at`, `version`, `deleted_at` | standard mutable metadata | — | — | optional exclusion/index OD | Conflict policy unresolved |
+| `created_at`, `updated_at`, `version`, `deleted_at` | standard mutable metadata | — | — | required same-advisor GiST exclusion for non-`CANCELLED`, non-deleted rows | Half-open ranges; requested appointments reserve time; no V1 admin bypass |
 
 ### `property_customer_matches`
 

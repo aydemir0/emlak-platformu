@@ -16,7 +16,7 @@ Define atomicity, isolation, locking, conflict, retry, and idempotency boundarie
 - Retry serialization failures and deadlocks only at the complete idempotent use-case boundary, with a strict attempt limit and jitter. Do not retry validation, authorization, uniqueness, or invalid-transition failures.
 - Every externally repeatable command has an idempotency key or a domain uniqueness constraint. The transaction records the authoritative result before a repeated caller receives success.
 - Required audit evidence and durable outbox intent commit in the same transaction as the business change.
-- Soft delete and restore are commands with current-state and uniqueness checks; they are never blind timestamp updates.
+- Soft delete and restore are `ADMIN`-only commands with current-state and uniqueness checks; they are never blind timestamp updates.
 
 **Assumption:** PostgreSQL's default `READ COMMITTED` isolation is sufficient when paired with explicit conditional writes, narrow locks, unique/exclusion constraints, and atomic claims. A use case that requires a stronger isolation level must justify it explicitly.
 
@@ -50,7 +50,7 @@ Define atomicity, isolation, locking, conflict, retry, and idempotency boundarie
 | Convert lead to customer | Customer/contact records or selected existing customer, `lead_conversions`, lead state, activity, audit | Lock lead; lock candidate customers/contact points in ID order; unique one-successful-conversion invariant | One lead converts once; duplicate command returns conversion result; ambiguous match requires reviewed choice |
 | Merge customers | Survivor/customer version, contact points, requests, activities, appointments, matches, merge history, audit | Lock both customers in ascending UUID order and all moved child rows deterministically | Merge command idempotent; uniqueness/retention conflicts abort entire transaction; source becomes merged/soft-deleted |
 | Create/update customer request | Request, feature junctions, activity/audit where required | Customer/request version; feature rows replaced transactionally | Stale version conflicts; deleted customer cannot gain new active requests |
-| Book/reschedule appointment | Appointment and activity/audit/outbox | Conditional version plus exclusion constraint if no-overlap policy is approved | Collision returns typed scheduling conflict; repeated booking key returns same appointment |
+| Book/reschedule appointment | Appointment and activity/audit/outbox | Conditional version plus mandatory same-advisor time-range exclusion for every non-cancelled, non-deleted appointment | Collision returns typed scheduling conflict; repeated booking key returns same appointment |
 | Complete property/customer match generation | Retire the prior current generation, insert/return the versioned match and normalized reasons | Lock property first, then customer request, then current match rows in immutable-ID order; verify the stored property/request versions while parent locks are held; permanent generation-basis uniqueness plus one-current-generation constraint | Identical basis returns one result; a stale worker fails/no-ops. Every property/request mutation that changes matching input marks its affected current matches `STALE` in the same parent transaction before commit |
 | Publish SEO/content | Record/version, current slug/history, audit, cache/sitemap outbox | Lock aggregate/current slug and check global route namespace | Canonical collision fails atomically; no partial sitemap/cache effect |
 | Update access grants | Role assignment, audit, revocation outbox where required | Principal/assignment locks plus uniqueness | Revocation becomes authoritative at commit; stale JWT is not trusted for sensitive access |
@@ -77,11 +77,11 @@ A partial unique invariant on active cover rows is the final guard. Temporary un
 
 ## Appointment collision strategy
 
-**Assumption:** Appointments use half-open intervals `[starts_at, ends_at)` so an appointment may begin when the previous one ends.
+**Decision:** Appointments use half-open intervals `[starts_at, ends_at)` so an appointment may begin when the previous one ends. Two non-cancelled, non-deleted appointments assigned to the same advisor must never overlap.
 
-If product policy prohibits an advisor from holding overlapping appointments in blocking states, prefer a PostgreSQL GiST exclusion constraint over a check-then-insert query. The predicate must include only active blocking states and non-deleted rows; implementation would require validating the supported extension/operator setup. Application prechecks improve messages, but the exclusion constraint wins races.
+The implementation must use a PostgreSQL GiST exclusion constraint over advisor and the appointment time range, scoped to rows with an advisor where status is not `CANCELLED` and the row is not deleted. Application prechecks improve messages, but the exclusion constraint wins races. There is no V1 administrator bypass; cancelling or rescheduling an existing appointment is required to clear a collision. Extension/operator support must be verified before migration implementation.
 
-**Open Decision:** Define blocking appointment states, whether tentative/requested appointments reserve time, buffers between meetings, multi-advisor appointments, and administrator override semantics. Until resolved, no overlap guarantee is claimed.
+Requested appointments reserve time in V1. Buffer duration and any future multi-advisor scheduling model remain Open Decisions; neither weakens the same-advisor no-overlap invariant.
 
 ## Customer duplicate and merge concurrency
 
@@ -120,7 +120,7 @@ Claims select eligible rows and change lease ownership/expiry atomically. Worker
 
 ## Open Decisions
 
-- Appointment blocking states, buffers, overrides, and whether the exclusion constraint is enabled.
+- Appointment buffer duration and any future multi-advisor scheduling model. Same-advisor overlap prevention and the exclusion-constraint direction are locked for V1.
 - Bulk-command atomicity and maximum batch sizes per workflow.
 - Customer contact uniqueness rules for verified, shared, recycled, or household contact points.
 - Exact transaction/lock timeouts and retry budgets.
