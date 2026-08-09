@@ -1,6 +1,6 @@
 # Media Architecture
 
-Status: Proposed
+Status: Phase 6 foundation implemented; delivery topology and production worker operations remain open
 
 ## Purpose
 
@@ -10,7 +10,9 @@ Define a secure, recoverable, SEO-aware property-image lifecycle using Cloudflar
 
 - **Assumption:** Original uploads remain private. Technical readiness and public eligibility are separate gates; a ready variant remains private until the associated property/media visibility policy permits delivery.
 - **Assumption:** Variants are immutable and versioned so they can use long-lived CDN caching without overwrites.
-- **Open Decision:** Final format fallback, width/quality recipes, maximum input limits, malware-control approach, and processing runtime require layout tests, threat modeling, and cost measurements.
+- **Assumption:** The versioned, configurable `property-v1` security recipe accepts static JPEG/PNG/WebP up to 15 MiB, 12,000 px per edge and 50 MP; emits non-upscaled/non-cropped 640/1280 WebP quality 82 and AVIF quality 55 candidates; normalizes orientation; and strips EXIF/GPS/ICC/metadata from public outputs. These are Phase 6 technical defaults, not final product art direction.
+- **Assumption:** Upload grants are exact-key presigned PUT capabilities with a five-minute maximum lifetime. Declared size is authorized before signing and actual bytes are bounded and verified at finalization; PUT itself is not treated as a trusted validation gate.
+- **Open Decision:** Final visual recipe, malware runtime, worker scheduler/runtime, CDN delivery topology, and hard-removal SLO require operational and product evidence.
 - **Open Decision:** Retention, restore, legal-hold, and irreversible purge periods require product, privacy, and legal decisions.
 
 ## Responsibilities
@@ -40,8 +42,8 @@ The R2 origin is not directly enumerable or publicly readable. A dedicated media
 
 1. An authenticated actor requests an upload; the application authorizes the property and creates a media/upload record with a stable media identifier and an unpredictable upload capability.
 2. The server issues short-lived, single-purpose access limited by key, expected type, size, and checksum where supported; the browser uploads only to quarantine.
-3. Finalization confirms object existence, size, checksum, actor, property, and one-time intent, then moves the record to validation.
-4. A claimed work item verifies magic bytes and actual decode, dimensions/pixel/frame limits, completeness, active-content/polyglot risk, and the approved malware control.
+3. Finalization performs a bounded read, recomputes SHA-256, confirms actual size/content type, actor, property, expiry, and one-time intent, then atomically records `UPLOADED`, audit, and processing outbox intent.
+4. A PostgreSQL-backed short lease claims work with `FOR UPDATE SKIP LOCKED`. The worker verifies actual decode and MIME agreement, dimensions/pixel/page limits, and completeness outside the database transaction. SVG and executable input are rejected. Malware runtime remains open.
 5. Processing strips EXIF/GPS, normalizes orientation and profiles, then generates bounded AVIF/WebP responsive variants and an approved compatibility fallback from the validated original.
 6. One transaction records immutable variant metadata and moves the media to `ready`; this does not publish it. Public reads and the delivery boundary may expose only variants that are both ready and currently eligible under the committed property/media visibility state. Cache/read-model invalidation follows commit.
 7. Unpublish, media-visibility removal, soft deletion, accidental publication, or privacy takedown immediately revokes delivery eligibility, durably requests page/media cache purge, and stops origin delivery under a documented hard removal bound. A later idempotent purge removes retained private variants/originals only after retention, reference, privacy-erasure, and legal-hold checks.
@@ -87,9 +89,8 @@ Start with a durable database-backed work boundary and bounded workers within th
 
 ## Open questions
 
-- Which input formats, animation behavior, maximum dimensions/bytes, and malware controls are required?
-- Which responsive recipes and compatibility fallback meet actual layouts and browser support targets?
-- Where will bounded decoding and transformation execute, and what retry/dead-letter operation will administrators use?
-- What cover-image invariant, ordering-conflict policy, and editorial workflow apply?
+- Which malware runtime and scanning policy are required?
+- Which final visual recipe and compatibility fallback meet measured layouts?
+- Which production scheduler/runtime invokes the implemented PostgreSQL-backed worker boundary?
 - What media-delivery topology and revocation mechanism meet the required hard removal SLO without making draft/private variants public?
-- Which retention, legal-hold, restore, and privacy-erasure rules govern originals and variants?
+- Which configurable retention, legal-hold, restore, and privacy-erasure durations govern originals and variants?

@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 
 import { PropertyForm } from "@/features/properties/components/property-form";
 import { PropertyPriceForm } from "@/features/properties/components/property-price-form";
+import { PropertyMediaManager } from "@/features/property-media/components/property-media-manager";
 import { getPropertyEditorData } from "@/features/properties/property-queries.server";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,7 @@ export default async function PropertyPage({
   params,
 }: Readonly<{ params: Promise<{ id: string }> }>) {
   const { id } = await params;
-  const { property, references } = await getPropertyEditorData(id);
+  const { property, references, media } = await getPropertyEditorData(id);
   if (!property) notFound();
   const initial = {
     title: property.title,
@@ -60,6 +61,14 @@ export default async function PropertyPage({
         idempotencyKey={randomUUID()}
         amountMinor={property.priceAmountMinor?.toString() ?? null}
         currencyCode={property.currencyCode}
+      />
+      <PropertyMediaManager
+        propertyId={property.id}
+        initialPropertyVersion={property.version.toString()}
+        initialItems={media.map((item) => ({
+          ...item,
+          version: item.version.toString(),
+        }))}
       />
     </section>
   );

@@ -26,7 +26,7 @@
 
 **Files:**
 
-- Create: `supabase/migrations/20260809204132_property_media_pipeline.sql`
+- Create: `supabase/migrations/20260810010000_property_media_pipeline.sql`
 - Create: `supabase/tests/database/property_media_pipeline.test.sql`
 - Modify: `supabase/tests/database/schema_contract.test.sql`
 - Modify: `src/types/database.generated.ts`

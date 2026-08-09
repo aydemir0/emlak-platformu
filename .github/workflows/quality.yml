@@ -28,6 +28,10 @@ jobs:
       - run: npx -y supabase@2.113.0 start
       - run: npx -y supabase@2.113.0 db reset --local
       - run: npx -y supabase@2.113.0 test db
+      - name: Verify generated database types are current
+        run: |
+          npx -y supabase@2.113.0 gen types typescript --local > /tmp/database.generated.ts
+          diff -u src/types/database.generated.ts /tmp/database.generated.ts
       - run: npm run lint
       - run: npm run format:check
       - run: npm run typecheck

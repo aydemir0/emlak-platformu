@@ -1,6 +1,6 @@
 # Property media lifecycle data design
 
-**Status:** Proposed Phase 2 design; documentation only. No bucket, schema, migration, or processor is introduced.
+**Status:** Phase 6 additive schema and application foundation implemented locally; production R2/CDN/worker activation is not performed.
 
 ## Purpose and ownership
 
@@ -10,7 +10,7 @@ The Property Media domain owns upload finalization, technical processing state, 
 
 | Table | Responsibility and important invariants |
 | --- | --- |
-| `media_upload_sessions` | All pre-finalization state: server-generated unpredictable upload identity/key, property and actor, expected type/size/checksum, expiry, one-time finalization/idempotency key, and conceptual session status `REQUESTED`, `UPLOADING`, `FINALIZED`, `EXPIRED`, or `ABORTED`. These are session states, not persistent media states. |
+| `media_upload_sessions` | All pre-finalization state: server-generated unpredictable upload and planned media identities/key, property and actor, expected type/size/checksum, expiry, one-time finalization/idempotency key, observed byte/checksum/etag/time evidence, and session status `REQUESTED`, `UPLOADING`, `FINALIZED`, `EXPIRED`, or `ABORTED`. These are session states, not persistent media states. |
 | `property_media` | Stable media/property identity, persistent state, original key/checksum/detected facts, visibility, cover flag, dense positive `sort_order`, processor/recipe version, `version`, lifecycle timestamps, uploader and provenance. Persistent state is exactly `UPLOADED`, `PROCESSING`, `READY`, `FAILED`, or `DELETED`. |
 | `property_media_variants` | Immutable versioned R2 variant metadata keyed to media plus recipe/version/width/format, dimensions, bytes, checksum, and object key. V1 responsive output formats are WebP and AVIF. A uniqueness rule prevents two rows for the same media/version/recipe/width/format. |
 | `media_processing_attempts` | Stable attempt identity/input plus a recoverable lease (`lease_owner`, `lease_expires_at`, heartbeat), processor/source/recipe versions, start/end, categorized outcome/error, and correlation/idempotency identifier. Identity/input is immutable; only the narrowly scoped worker may update lease heartbeat and terminal outcome fields. No raw bytes, signed URLs, EXIF, or secrets. |
@@ -56,11 +56,15 @@ Indexes support active media by `(property_id, sort_order)`, the partial cover l
 
 Upload initialization, finalization, visibility, cover, reorder, and reprocess are server-authorized against current property scope. Media soft-delete and restore require `ADMIN`; hard purge remains a separate narrowly privileged retention/privacy operation. Browsers receive only short-lived single-object upload authority and never list/overwrite/general R2 credentials. RLS is deny-by-default and operation-specific on exposed metadata; anonymous access is limited to the ready-and-currently-eligible projection, not raw tables or keys. Trusted processors/service roles are narrowly scoped, server-only, version-aware, and audited. Rate/size/dimension/frame/decode/concurrency limits protect upload and processing cost.
 
+## Implemented Phase 6 security defaults
+
+Recipe `property-v1` is configurable/versioned and is not a final product design decision: static JPEG/PNG/WebP only; 15 MiB maximum upload; 12,000 px maximum edge; 50 MP maximum decoded area; five-minute upload grant; 640/1280 width candidates without crop/upscale; WebP quality 82; AVIF quality 55; orientation normalization; and removal of EXIF/GPS/ICC/metadata from public outputs. PostgreSQL owns session/media/attempt/variant facts, audit, and outbox. R2 owns bytes. The deterministic adapter provides local/test behavior without remote mutation.
+
 ## Assumptions and Open Decisions
 
 - **Assumption:** Reprocessing may temporarily remove public eligibility; whether dual-version seamless promotion is needed is an Open Decision.
 - **Assumption:** Immutable validated originals are retained privately for controlled reprocessing until lifecycle policy requires purge.
-- **Open Decision:** Approved input formats, animation, byte/dimension/pixel/frame limits, malware control, processor runtime, retry/dead-letter policy, and orphan cadence.
-- **Open Decision:** Responsive widths/recipes, compatibility fallback beyond the locked WebP/AVIF outputs, crop policy, byte budgets, and seamless reprocessing/version promotion.
+- **Open Decision:** Malware runtime, production worker scheduler/runtime, bounded retry/dead-letter operations, and reconciliation cadence.
+- **Open Decision:** Final visual recipe and compatibility fallback beyond the versioned Phase 6 security defaults, plus seamless reprocessing/version promotion.
 - **Open Decision:** Product behavior when the last active media is deleted and whether publication must additionally require a minimum media count/type.
-- **Open Decision:** R2 bucket/domain topology, delivery/revocation mechanism and hard-removal SLO, configurable restore windows, and exact legal-hold/privacy-erasure/retention periods.
+- **Open Decision:** CDN delivery topology, delivery/revocation mechanism and hard-removal SLO, configurable restore windows, and exact legal-hold/privacy-erasure/retention periods.
