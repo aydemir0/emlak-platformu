@@ -1,0 +1,2 @@
+-- No environment-specific or business data is seeded in Phase 3.
+-- Required V1 reference rows are versioned in the reference_data migration.
