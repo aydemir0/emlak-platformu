@@ -1,7 +1,8 @@
 # Property Media and Cloudflare R2 Design
 
-**Status:** Approved for Phase 6 implementation  
-**Date:** 2026-08-09  
+**Status:** Approved for Phase 6 implementation
+
+**Date:** 2026-08-09
 **Branch:** `agent/property-media-r2`
 
 ## Outcome
