@@ -1,0 +1,77 @@
+# Customer, lead, request, appointment, and match data design
+
+**Status:** Proposed Phase 2 design; documentation only. Contact normalization is a design contract, not an implementation.
+
+## Purpose and ownership
+
+Leads capture inbound interest; Customers own canonical people/contact records; Customer Requests own durable needs; Appointments own scheduling; matching is advisory. They remain distinct even when data overlaps. This document refines [domain boundaries](../architecture/domain-boundaries.md), [authentication and authorization](../architecture/authentication-authorization.md), [ADR-002](../decisions/ADR-002-supabase-postgresql.md), and [ADR-006](../decisions/ADR-006-authentication-authorization.md). V1 assumes one operating business without speculative tenant columns per [ADR-009](../decisions/ADR-009-future-multi-tenancy-boundary.md). Expected database peers are the [domain model](domain-model.md), [authorization matrix](authorization-matrix.md), [RLS design](rls-design.md), [index strategy](index-strategy.md), [transaction and concurrency design](transaction-concurrency.md), [outbox design](outbox-design.md), [retention and deletion design](retention-deletion.md), [property lifecycle](property-lifecycle.md), and [media lifecycle](media-lifecycle.md).
+
+## Canonical records and relationships
+
+| Table | Responsibility and important invariants |
+| --- | --- |
+| `leads` | One inbound acquisition/triage record with source, purpose-limited contact input, consent evidence/reference, assigned advisor, lifecycle, idempotency key, version, and deletion metadata. A lead is never the canonical customer. |
+| `lead_conversions` | Immutable conversion/link transaction record: lead, resulting customer, idempotency key, actor, outcome, safe resolution/duplicate evidence, timestamp, and correlation ID. One successful conversion per lead; repeated identical commands return it. |
+| `customers` | Stable canonical person identity, privacy/lifecycle state, version, merge survivor status, timestamps, and soft-delete metadata. Contact values live in `customer_contact_points`. |
+| `customer_contact_points` | Display and normalized contact values, type, verification/provenance, canonical-match eligibility, consent/purpose, version, and deletion metadata. Normalized values are sensitive and access-controlled. |
+| `customer_merge_history` | Append-only reviewed merges: survivor, absorbed customer, actor, reason/evidence, before references, timestamp, and correlation ID. No merge occurs from normalization alone. |
+| `customer_requests` | A customer's durable search/service requirement with independent lifecycle/version, intent, commercial/location constraints, consent/source, assignment, and deletion metadata. One customer may have many concurrent or historical requests. |
+| `customer_request_features` | Explicit requested-feature junction with preference strength/required flag and provenance. Composite uniqueness prevents duplicate feature entries per request. |
+| `customer_activities` | Append-only purpose-limited timeline facts (contact, note reference, status event, outcome), actor/source, customer and optional lead/request/property/appointment references. Free text is minimized and separately protected. |
+| `appointments` | Scheduled interaction with customer, optional request/property, advisor, start/end instants, timezone/display context, status, version, and deletion metadata. End is after start. |
+| `property_customer_matches` | Advisory link across property, customer, and request, deterministic rule/version, score/explanation summary, lifecycle, reviewer, timestamps, and version. |
+| `property_customer_match_reasons` | Structured deterministic reason codes/facts for a match. It cannot contain unverifiable AI claims or unnecessary PII. |
+
+`customer_requests` must have a uniqueness key usable for `(id, customer_id)`. `property_customer_matches(request_id, customer_id)` references that composite identity, while `property_id` references `properties`; therefore a match cannot attach a customer's request to a different customer. A business uniqueness rule prevents duplicate active match rows for the same property/customer/request/rule version. Reasons reference the match and remain consistent with its three-way identity.
+
+## Lifecycle contracts and invalid transitions
+
+Proposed lead states are `NEW`, `TRIAGED`, `QUALIFIED`, `DISQUALIFIED`, `CONVERTED`, `ARCHIVED`. Allowed transitions are `NEW -> TRIAGED`, `NEW -> ARCHIVED`, `TRIAGED -> QUALIFIED`, `TRIAGED -> DISQUALIFIED`, `TRIAGED -> ARCHIVED`, `QUALIFIED -> CONVERTED`, `QUALIFIED -> DISQUALIFIED`, `QUALIFIED -> ARCHIVED`, `DISQUALIFIED -> TRIAGED`, `DISQUALIFIED -> ARCHIVED`, `CONVERTED -> ARCHIVED`, and `ARCHIVED -> TRIAGED` on authorized retention-window restore. Conversion is only `QUALIFIED -> CONVERTED`. Each transition requires expected version, current state, server authorization, reason where applicable, append-only activity/audit evidence, and atomic state/version update. All unlisted/self transitions are invalid.
+
+Proposed customer states are `ACTIVE`, `RESTRICTED`, `ARCHIVED`, `ERASED`. Allowed transitions are `ACTIVE -> RESTRICTED`, `ACTIVE -> ARCHIVED`, `RESTRICTED -> ACTIVE`, `RESTRICTED -> ARCHIVED`, `ARCHIVED -> ACTIVE` within retention after uniqueness/privacy checks, and `ACTIVE|RESTRICTED|ARCHIVED -> ERASED` through the irreversible privacy workflow. `ERASED` is terminal. Restriction, archive, restore, merge, export, and erasure require explicit authorization and audit. Restore never silently revives deleted contact points, requests, appointments, assignments, or consent.
+
+Proposed request states are `DRAFT`, `ACTIVE`, `PAUSED`, `FULFILLED`, `CANCELLED`, `ARCHIVED`. Allowed transitions are `DRAFT -> ACTIVE|CANCELLED|ARCHIVED`, `ACTIVE -> PAUSED|FULFILLED|CANCELLED`, `PAUSED -> ACTIVE|FULFILLED|CANCELLED`, `FULFILLED -> ARCHIVED`, `CANCELLED -> DRAFT|ARCHIVED` within retention and with fresh validation, and `ARCHIVED -> DRAFT` within retention. Every change locks the request, checks expected version/customer availability, appends activity/audit, and invalidates/recomputes matches after commit when criteria changed. All unlisted/self transitions are invalid.
+
+Proposed appointment states are `REQUESTED`, `CONFIRMED`, `CANCELLED`, `COMPLETED`, `NO_SHOW`. Allowed transitions are `REQUESTED -> CONFIRMED|CANCELLED`, `CONFIRMED -> CANCELLED|COMPLETED|NO_SHOW`, and no exits from `CANCELLED`, `COMPLETED`, or `NO_SHOW`. Rescheduling changes the interval/version in an authorized conflict-checked transaction and records activity/audit; it is not a hidden state transition. All unlisted/self transitions are invalid.
+
+Proposed match states are `PROPOSED`, `REVIEWED`, `DISMISSED`, `STALE`. Allowed transitions are `PROPOSED -> REVIEWED|DISMISSED|STALE` and `REVIEWED -> DISMISSED|STALE`. `DISMISSED` and `STALE` are terminal for that immutable computed basis; recomputation under a new rule/input basis creates a separately versioned `PROPOSED` row. All unlisted/self transitions are invalid.
+
+## Explicit idempotent lead conversion
+
+Conversion is a named application use case, never an update inferred from matching contact text. It authenticates/authorizes the actor, validates a unique client idempotency key, locks the lead, and checks expected lead version and `QUALIFIED` state. It then either creates a new customer or links a deliberately selected existing customer after duplicate-candidate review; creates/moves approved contact points with their provenance and consent boundaries; inserts one `lead_conversions` success record; moves the lead to `CONVERTED`; appends customer activity and audit evidence; increments versions; and writes required notification/outbox intent in one transaction. A uniqueness constraint on successful conversion by lead plus on the idempotency key resolves races. An identical retry returns the recorded outcome; a different payload using the same key returns conflict. Provider email/analytics occurs after commit and cannot roll back conversion.
+
+## Contact normalization and duplicate candidates
+
+Normalization is designed but not implemented here. Preserve the bounded display value separately from a normalized comparison value, with normalization algorithm/version, contact type, verification status, source, and timestamps. Email normalization must be conservative (case/Unicode/domain handling only as approved; no provider-specific dot/plus assumptions without a decision). Phone normalization targets an approved international representation only when country context is sufficient; ambiguous inputs remain unqualified rather than guessed.
+
+Raw or unverified normalized contact values are not globally unique because legitimate shared/reused contacts and duplicate candidates must be represented. A partial uniqueness rule may protect only active, verified, explicitly canonical-for-identity contact points by `(contact_type, normalized_value)`. Attempting to promote a colliding point returns a duplicate-candidate conflict for reviewed link/merge; it never silently selects or merges a customer. Candidate lookup indexes use normalized value/type and exclude erased/deleted data as policy requires. Search results are permission-filtered and non-enumerating. Exact normalization algorithms, shared-contact exceptions, verification, and canonical-promotion policy are Open Decisions.
+
+## Appointments and concurrency
+
+Creation, confirmation, and rescheduling lock the appointment and relevant advisor scheduling rows in deterministic order, compare expected versions, validate bounds/timezone semantics, and apply the chosen collision policy in one transaction. If the business forbids overlapping live advisor appointments, evaluate a conditional PostgreSQL GiST exclusion constraint on advisor plus a `tstzrange(starts_at, ends_at, '[)')`, applying only to non-deleted `REQUESTED`/`CONFIRMED` rows (exact statuses depend on whether requests hold capacity). This gives the database a final race guard; application checks provide useful conflict responses. If overlaps, capacity, travel buffers, or tentative holds are allowed, a different model is required. The final collision and capacity policy is an Open Decision; until resolved, no implementation may claim overlap prevention.
+
+## Matching authority, concurrency, and queries
+
+Matches are deterministic and advisory. Rules consume committed property facts plus one customer's request, record the rule/property/request versions and structured reasons, and may be regenerated idempotently. Completion locks the property first, then the customer request, then current match rows in immutable-ID order; it verifies parent versions while those locks are held, retires the prior current generation, and inserts the match/reasons atomically. Every property or request mutation that changes matching input marks affected current matches `STALE` in that same parent transaction. These paired lock/write rules close the `READ COMMITTED` stale-worker race; an obsolete basis cannot remain the current generation after a parent change commits. AI may draft explanations or help rank for review only; it cannot create authoritative eligibility, reject a customer, change a request/property, or contact anyone. Staff/customer actions always re-check current property and request state.
+
+Query-driven indexes cover lead triage/assignment and idempotency, conversion by lead/key, customer contact candidate lookup, requests by customer/state/update time, activities by customer/time, appointments by advisor/time and customer/time, matches by request/state/score and property/state, plus all foreign keys. PII/admin results are bounded and never shared-cached. No index is added for every possible request filter.
+
+## Soft delete, restore, retention, and privacy
+
+Soft deletion excludes records from default operational reads but is not erasure. Lead/customer deletion, merge, export, restore, and erasure are explicit use cases with actor, reason, correlation ID, expected version, and append-only audit. Child behavior is deliberate: archived/deleted customers block new requests/appointments; existing records remain hidden or retained according to legal purpose and are never silently reassigned. A customer merge preserves absorbed identity and source provenance in `customer_merge_history`, repoints only reviewed relationships atomically, handles contact uniqueness conflicts explicitly, and is reversible only through a separately designed audited correction—not by deleting history.
+
+Retention is purpose-specific for lead input, consent evidence, customer/contact PII, activities/notes, appointments, match projections, audits, exports, backups, and provider copies. Erasure irreversibly removes or anonymizes PII where lawful, tombstones identities needed to prevent resurrection, deletes derived matches, and reconciles downstream copies; legal holds override ordinary purge with restricted access. Exact periods and legal bases are Open Decisions.
+
+## Authorization and RLS boundary
+
+Public lead/appointment commands are narrowly scoped, rate-limited, schema-validated, consent-aware, idempotent, and return non-enumerating responses. They do not expose tables directly. Staff reads/writes require a current server-side session, action/object/purpose authorization, and scoped queries. RLS is enabled deny-by-default with separate operations on every exposed table; customers, leads, requests, contact points, activities, appointments, matches, merge/conversion history, deleted records, and exports are never anonymously readable. Normal application roles cannot mutate append-only conversion/merge/audit history. Service-role use is server-only and audited. PII is excluded from URLs, cache keys, GA4, ordinary logs, outbox payloads, and AI systems unless a separately approved lawful/minimized boundary exists.
+
+## Assumptions and Open Decisions
+
+- **Assumption:** A customer may have many simultaneous and historical `customer_requests`; lifecycle and assignment are per request.
+- **Assumption:** Lead source/consent provenance remains intact after conversion and merge.
+- **Open Decision:** Approve the proposed lifecycle vocabularies, assignment/ownership permissions, qualification reasons, and whether customer self-service accounts are in the initial release scope.
+- **Open Decision:** Contact normalization algorithms, country assumptions, verification, shared-household/business contacts, canonical partial-uniqueness rules, duplicate-review workflow, and merge correction.
+- **Open Decision:** Final advisor appointment collision, capacity, travel-buffer, tentative-hold, timezone, cancellation, and no-show policy, including whether to adopt the conditional GiST exclusion option.
+- **Open Decision:** Request feature vocabulary, scoring weights, match review/explanation visibility, recomputation SLO, and deterministic rule versioning.
+- **Open Decision:** Consent/legal basis, retention, restore, export, legal hold, erasure, backup, and audit access periods by data class.
