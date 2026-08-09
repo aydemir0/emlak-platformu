@@ -30,9 +30,24 @@ describe("environment boundaries", () => {
       parseServerEnv({
         ...publicValues,
         SUPABASE_SERVICE_ROLE_KEY: "server-only-service-role-key",
+        LOCAL_DATABASE_URL:
+          "postgresql://postgres:postgres@127.0.0.1:55322/postgres",
       }),
     ).toMatchObject({
       SUPABASE_SERVICE_ROLE_KEY: "server-only-service-role-key",
     });
+  });
+
+  it("rejects remote or wrong-port database URLs", () => {
+    expect(() =>
+      parseServerEnv({
+        ...publicValues,
+        SUPABASE_SERVICE_ROLE_KEY: "server-only-service-role-key",
+        LOCAL_DATABASE_URL:
+          "postgresql://postgres:secret@example.supabase.co:5432/postgres",
+      }),
+    ).toThrow(
+      "LOCAL_DATABASE_URL must target local emlak-platformu port 55322",
+    );
   });
 });

@@ -25,7 +25,7 @@ The design follows [domain boundaries](../architecture/domain-boundaries.md), [m
 | Context | Aggregate roots / authoritative records | Dependent records |
 | --- | --- | --- |
 | Identity and access | `user_identities`, `advisors`, `roles`, `permissions`, `user_role_assignments` | `role_permissions` |
-| Property inventory | `properties`, `locations`, `listing_types`, `property_types`, `property_features` | state/slug/price histories, feature/advisor assignments |
+| Property inventory | `properties`, `locations`, `listing_types`, `property_types`, `heating_types`, `property_features` | state/slug/price histories, feature/advisor assignments |
 | Property media | `media_upload_sessions`, `property_media` | variants and processing attempts |
 | CRM | `leads`, `customers`, `customer_requests` | conversions, contact points, merge history, request features, activities |
 | Scheduling and matching | `appointments`, `property_customer_matches` | match reasons |
@@ -101,10 +101,10 @@ The design follows [domain boundaries](../architecture/domain-boundaries.md), [m
 
 No organization/tenant table, physical-asset/listing split, spatial geometry, generalized workflow engine, event-sourcing framework, broker, search service, or provider-specific type is introduced. Each needs evidence and, where costly to reverse, an ADR.
 
-## Canonical 44-table inventory
+## Canonical 45-table inventory
 
 - Identity/access: `user_identities`, `advisors`, `roles`, `permissions`, `role_permissions`, `user_role_assignments`.
-- Property/location/catalog: `listing_types`, `property_types`, `properties`, `property_state_history`, `property_slug_history`, `locations`, `property_features`, `property_feature_assignments`, `property_advisor_assignments`, `property_price_history`, `location_slug_history`.
+- Property/location/catalog: `listing_types`, `property_types`, `heating_types`, `properties`, `property_state_history`, `property_slug_history`, `locations`, `property_features`, `property_feature_assignments`, `property_advisor_assignments`, `property_price_history`, `location_slug_history`.
 - Media: `media_upload_sessions`, `property_media`, `property_media_variants`, `media_processing_attempts`.
 - CRM: `leads`, `lead_conversions`, `customers`, `customer_contact_points`, `customer_merge_history`, `customer_requests`, `customer_request_features`, `customer_activities`.
 - Scheduling/matching: `appointments`, `property_customer_matches`, `property_customer_match_reasons`.

@@ -29,7 +29,7 @@ The matrix keeps five test principals: **anonymous** (`AN`), **authenticated cus
 - `PS` access is limited to the named worker/use case. Service credentials are not used for ordinary browser-backed CRUD.
 - `—` means denied. `soft-delete` is an explicit command that changes lifecycle state; it is not an unrestricted update. `hard purge` is a separate privileged retention/privacy command.
 
-## Canonical 44-table operation matrix
+## Canonical 45-table operation matrix
 
 Each cell states the actors and conditions intended for that operation. `D/SD` means physical delete or soft-delete intention, explicitly identified per row.
 
@@ -79,6 +79,7 @@ Each cell states the actors and conditions intended for that operation. `D/SD` m
 | 42 | `audit_logs` | AM with explicit audit permission; PS incident/compliance task | PS/application transaction only | — | — for normal roles; exceptional policy-governed purge PS only | Append-only. Normal application roles cannot update/delete; access, export, and exceptional retention actions are themselves audited. |
 | 43 | `outbox_messages` | PS dispatcher/operations only; AM only through purpose-built safe operational view | PS/application transaction only | PS claim/attempt/outcome fields only | Privileged retention purge: PS only | Claim, lease, retry, resolve, replay, and purge are privileged and audited; payloads contain no secrets/raw PII. |
 | 44 | `site_settings` | Public server safe allowlist; AD with settings permission; AM; PS | AM/PS | AM/PS | Soft-delete/version retirement only if modeled: AM/PS | Change, activate, rollback, and secret-bearing setting access are explicit commands; secrets do not belong in this table. |
+| 45 | `heating_types` | Public server approved subset; AD/AM reference read; PS | AM/PS catalog management | AM/PS | Soft-delete/deactivate: AM/PS | No seeded vocabulary; inactive/deleted rows cannot be newly assigned and referenced rows are not cascade-deleted. |
 
 ## Actor summaries
 

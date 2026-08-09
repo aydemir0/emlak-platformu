@@ -20,6 +20,8 @@ export default defineConfig({
           NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:55321",
           NEXT_PUBLIC_SUPABASE_ANON_KEY: "public-anon-key-for-playwright-smoke",
           SUPABASE_SERVICE_ROLE_KEY: "server-only-key-for-playwright-smoke",
+          LOCAL_DATABASE_URL:
+            "postgresql://postgres:postgres@127.0.0.1:55322/postgres",
         },
         reuseExistingServer: !process.env.CI,
         timeout: 120_000,

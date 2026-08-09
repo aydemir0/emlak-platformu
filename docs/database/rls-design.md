@@ -67,7 +67,7 @@ High-risk policy changes require review of application checks, grants, RLS, inde
 
 ## Access-matrix-to-policy test requirements
 
-For all 44 tables, generate a test grid covering five actors times `SELECT`, `INSERT`, `UPDATE`, `DELETE/soft-delete`, and named special commands. Each allow case must have at least one same-shape deny case.
+For all 45 tables, generate a test grid covering five actors times `SELECT`, `INSERT`, `UPDATE`, `DELETE/soft-delete`, and named special commands. Each allow case must have at least one same-shape deny case.
 
 Required fixtures and assertions include:
 

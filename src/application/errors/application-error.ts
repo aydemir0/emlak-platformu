@@ -6,6 +6,12 @@ export type ApplicationErrorCode =
   | "CONFLICT"
   | "NOT_FOUND"
   | "DEPENDENCY_UNAVAILABLE"
+  | "PROPERTY_NOT_FOUND"
+  | "PROPERTY_FORBIDDEN"
+  | "PROPERTY_INVALID_TRANSITION"
+  | "PROPERTY_CONFLICT"
+  | "PROPERTY_VALIDATION_FAILED"
+  | "PROPERTY_REFERENCE_DATA_MISSING"
   | "INTERNAL";
 
 type ApplicationErrorOptions = ErrorOptions & { correlationId?: string };
