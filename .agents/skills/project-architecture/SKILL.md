@@ -19,15 +19,15 @@ Before proposing code or structure:
 
 Organize by cohesive business capability rather than by technical file type alone. Treat properties, locations, advisors, leads, customers, customer requests, appointments, content/SEO, analytics, and audit logs as explicit domain areas.
 
-Use this dependency direction:
+Keep dependencies pointing inward:
 
 ```text
 UI / route handlers -> application use cases -> domain rules
-                                 |
-                                 v
-                    infrastructure adapters
+Infrastructure adapters -> application/domain contracts (ports)
 ```
 
+- Define infrastructure-facing contracts in the application or domain layer. Make Supabase, R2, Resend, analytics, and other adapters implement and depend on those contracts.
+- Never make the domain layer import or depend on infrastructure adapters, provider SDKs, or framework types.
 - Keep domain rules independent of React, Next.js request objects, Supabase clients, R2 clients, Resend, GA4, and vendor SDKs.
 - Put orchestration, authorization decisions, transactions, and idempotency in application use cases or server services.
 - Put persistence, email, object storage, and analytics behind narrow adapters at the boundary where substitution or isolated testing has value.
@@ -74,6 +74,15 @@ Prefer an outbox or equivalent durable handoff when database state and an extern
 - Keep canonical URL and indexability decisions in an explicit SEO policy, not scattered components.
 - Preserve conversion tracking without making third-party analytics a critical rendering dependency.
 - Use progressive enhancement for important discovery and lead-capture journeys.
+
+## Cache and read-model boundaries
+
+- Treat public discovery pages as cacheable read models; do not couple their query shape to privileged admin commands.
+- Keep cache keys/tags domain-specific and deterministic.
+- Invalidate only after the authoritative transaction commits successfully.
+- Do not cache permission-sensitive or user-specific data in shared public caches.
+- Prefer explicit stale/revalidation behavior over implicit framework defaults for SEO-critical pages.
+- Document consistency expectations for property publish, unpublish, price change, media reorder, and SEO metadata changes.
 
 ## Protect admin goals
 
