@@ -7,6 +7,31 @@ export type Json =
   | Json[]
 
 export type Database = {
+  graphql_public: {
+    Tables: {
+      [_ in never]: never
+    }
+    Views: {
+      [_ in never]: never
+    }
+    Functions: {
+      graphql: {
+        Args: {
+          extensions?: Json
+          operationName?: string
+          query?: string
+          variables?: Json
+        }
+        Returns: Json
+      }
+    }
+    Enums: {
+      [_ in never]: never
+    }
+    CompositeTypes: {
+      [_ in never]: never
+    }
+  }
   public: {
     Tables: {
       advisors: {
@@ -771,6 +796,42 @@ export type Database = {
           },
         ]
       }
+      heating_types: {
+        Row: {
+          code: string
+          created_at: string
+          deleted_at: string | null
+          description: string | null
+          id: string
+          label: string
+          status: string
+          updated_at: string
+          version: number
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          label: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          deleted_at?: string | null
+          description?: string | null
+          id?: string
+          label?: string
+          status?: string
+          updated_at?: string
+          version?: number
+        }
+        Relationships: []
+      }
       lead_conversions: {
         Row: {
           converted_at: string
@@ -1286,8 +1347,10 @@ export type Database = {
       }
       properties: {
         Row: {
+          address_line: string | null
           bathroom_count: number | null
           bedroom_count: number | null
+          building_age_years: number | null
           created_at: string
           currency_code: string | null
           current_route_reservation_id: string | null
@@ -1296,20 +1359,33 @@ export type Database = {
           deleted_at: string | null
           description: string | null
           floor_area_sqm: number | null
+          floor_number: number | null
+          furnished: boolean | null
+          gross_area_sqm: number | null
+          heating_type_id: string | null
           id: string
+          latitude: number | null
           listing_type_id: string
+          living_room_count: number | null
           location_id: string
+          location_visibility: string | null
+          longitude: number | null
+          net_area_sqm: number | null
           price_amount_minor: number | null
           property_type_id: string
           public_id: string
           published_at: string | null
+          short_description: string | null
           title: string
+          total_floor_count: number | null
           updated_at: string
           version: number
         }
         Insert: {
+          address_line?: string | null
           bathroom_count?: number | null
           bedroom_count?: number | null
+          building_age_years?: number | null
           created_at?: string
           currency_code?: string | null
           current_route_reservation_id?: string | null
@@ -1318,20 +1394,33 @@ export type Database = {
           deleted_at?: string | null
           description?: string | null
           floor_area_sqm?: number | null
+          floor_number?: number | null
+          furnished?: boolean | null
+          gross_area_sqm?: number | null
+          heating_type_id?: string | null
           id?: string
+          latitude?: number | null
           listing_type_id: string
+          living_room_count?: number | null
           location_id: string
+          location_visibility?: string | null
+          longitude?: number | null
+          net_area_sqm?: number | null
           price_amount_minor?: number | null
           property_type_id: string
           public_id: string
           published_at?: string | null
+          short_description?: string | null
           title: string
+          total_floor_count?: number | null
           updated_at?: string
           version?: number
         }
         Update: {
+          address_line?: string | null
           bathroom_count?: number | null
           bedroom_count?: number | null
+          building_age_years?: number | null
           created_at?: string
           currency_code?: string | null
           current_route_reservation_id?: string | null
@@ -1340,14 +1429,25 @@ export type Database = {
           deleted_at?: string | null
           description?: string | null
           floor_area_sqm?: number | null
+          floor_number?: number | null
+          furnished?: boolean | null
+          gross_area_sqm?: number | null
+          heating_type_id?: string | null
           id?: string
+          latitude?: number | null
           listing_type_id?: string
+          living_room_count?: number | null
           location_id?: string
+          location_visibility?: string | null
+          longitude?: number | null
+          net_area_sqm?: number | null
           price_amount_minor?: number | null
           property_type_id?: string
           public_id?: string
           published_at?: string | null
+          short_description?: string | null
           title?: string
+          total_floor_count?: number | null
           updated_at?: string
           version?: number
         }
@@ -1357,6 +1457,13 @@ export type Database = {
             columns: ["current_route_reservation_id"]
             isOneToOne: true
             referencedRelation: "public_route_reservations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "properties_heating_type_id_fkey"
+            columns: ["heating_type_id"]
+            isOneToOne: false
+            referencedRelation: "heating_types"
             referencedColumns: ["id"]
           },
           {
@@ -2665,6 +2772,9 @@ export type CompositeTypes<
     : never
 
 export const Constants = {
+  graphql_public: {
+    Enums: {},
+  },
   public: {
     Enums: {},
   },

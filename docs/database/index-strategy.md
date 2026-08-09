@@ -4,7 +4,7 @@
 
 ## Purpose
 
-Define a minimal, query-driven PostgreSQL index plan for the 44-table Phase 2 model. The plan protects integrity and known public/admin/RLS workflows without attempting to index every possible real-estate filter combination. Actual migrations must validate important queries with representative data and `EXPLAIN (ANALYZE, BUFFERS)` before claiming performance.
+Define a minimal, query-driven PostgreSQL index plan for the canonical 45-table model after the additive Phase 5 heating reference. The plan protects integrity and known public/admin/RLS workflows without attempting to index every possible real-estate filter combination. Actual migrations must validate important queries with representative data and `EXPLAIN (ANALYZE, BUFFERS)` before claiming performance.
 
 ## Principles
 
@@ -62,6 +62,8 @@ The following are schema-design requirements. Names are conceptual and may be ad
 | `user_role_assignments` | `(user_identity_id, role_id)` where `status = ACTIVE` | Partial unique | Stable predicate for V1 global assignment uniqueness; authorization separately checks optional expiry |
 | `listing_types` | normalized `code` | Permanent unique | Stable controlled vocabulary |
 | `property_types` | normalized `code` | Permanent unique | Stable controlled vocabulary |
+| `heating_types` | normalized `code` | Permanent unique | Stable controlled vocabulary; no seeded values |
+| `properties` | `heating_type_id` where non-null and property active | Partial B-tree | Admin filtering/reference impact without indexing low-selectivity optional facts |
 | `properties` | `public_id` | Permanent unique | Human/support identifier is immutable and never reused |
 | `properties`, `locations`, `seo_pages`, `content_entries` | `current_route_reservation_id` | Unique FK per table | Each aggregate points to one globally reserved current route; the reservation's global normalized-route uniqueness is authoritative |
 | `property_slug_history` | `route_reservation_id` | Unique FK | One retired property route belongs to one immutable history row |

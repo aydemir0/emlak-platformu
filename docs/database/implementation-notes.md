@@ -24,7 +24,7 @@ The migrations are normal ordered forward migrations. They intentionally do not 
 
 ## Authorization and exposure
 
-- All 44 tables have RLS enabled and forced. There are no `anon` policies.
+- All 45 tables have RLS enabled and forced. There are no `anon` policies.
 - `authenticated` represents staff only. Role and permission decisions come from `user_identities`, active role assignments, roles, and permissions—not mutable user metadata.
 - ADMIN policy access requires the trusted ADMIN role and Supabase Auth AAL2. This makes admin MFA a database access prerequisite; production Auth configuration and enrollment remain a deployment gate.
 - ADVISOR policies are limited to active property assignments and the customer's assigned advisor. Publish/unpublish additionally requires `properties.publish`. Delete/restore, export, audit, and role management have no advisor policy.

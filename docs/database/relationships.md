@@ -2,7 +2,7 @@
 
 ## Purpose
 
-This document defines relationship ownership, cardinality, database delete behavior, soft-delete visibility, and restore semantics for the 44-table model. It complements the [Domain model](domain-model.md), [Entity catalog](entity-catalog.md), [Schema draft](schema-draft.md), and [ERD](erd.md).
+This document defines relationship ownership, cardinality, database delete behavior, soft-delete visibility, and restore semantics for the 45-table model. It complements the [Domain model](domain-model.md), [Entity catalog](entity-catalog.md), [Schema draft](schema-draft.md), and [ERD](erd.md).
 
 ## Ownership and dependency direction
 
@@ -37,6 +37,7 @@ immutable events/evidence and post-commit delivery intents
 | `roles` → `user_role_assignments` | 1 → 0..* | Identity/access | R | active assignments are revoked/expired | not silently restored |
 | `listing_types` → `properties` | 1 → 0..* | Properties references catalog | R | existing properties retain reference; no new assignment | validate meaning before reuse |
 | `property_types` → `properties` | 1 → 0..* | Properties references catalog | R | same as listing type | same as listing type |
+| `heating_types` → `properties` | 1 → 0..* | Properties references optional catalog | R | existing properties retain reference; inactive choices cannot be newly assigned | revalidate identical meaning before reuse |
 | `locations` → `locations` | parent 1 → 0..* children; root 0 parents | Locations | R | descendants remain explicit but are non-selectable/public policy-controlled; subtree action OD | validate entire ancestor chain; no inferred repair |
 | `locations` → `properties` | 1 → 0..* | Properties owns selected location | R | affected property publication/edit transitions fail until valid | explicit property revalidation |
 | `properties` → `property_state_history` | 1 → 1..* after first transition | Properties | R | history retained | no history mutation |

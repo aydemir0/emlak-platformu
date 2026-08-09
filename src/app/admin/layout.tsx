@@ -1,15 +1,15 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
-import { getVerifiedAuthIdentity } from "@/infrastructure/supabase/verified-session.server";
+import { requireStaffPrincipal } from "@/infrastructure/auth/require-staff-principal.server";
 
 export const dynamic = "force-dynamic";
 
 export default async function AdminLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const identity = await getVerifiedAuthIdentity();
-  if (!identity) redirect("/");
+  const principal = await requireStaffPrincipal().catch(() => null);
+  if (!principal) redirect("/");
 
   return (
     <div className="bg-muted/30 min-h-svh">
@@ -18,7 +18,15 @@ export default async function AdminLayout({
           aria-label="Yönetim navigasyonu"
           className="mx-auto flex max-w-6xl items-center justify-between px-6 py-4"
         >
-          <span className="font-semibold">Yönetim</span>
+          <div className="flex items-center gap-5">
+            <span className="font-semibold">Yönetim</span>
+            <Link
+              className="text-muted-foreground hover:text-foreground text-sm"
+              href="/admin/properties"
+            >
+              İlanlar
+            </Link>
+          </div>
           <Link
             className="text-muted-foreground hover:text-foreground text-sm"
             href="/"

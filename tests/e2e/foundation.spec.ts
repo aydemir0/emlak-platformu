@@ -19,6 +19,16 @@ test("unauthenticated admin navigation fails closed", async ({ page }) => {
   ).toBeVisible();
 });
 
+test("unauthenticated property administration fails closed", async ({
+  page,
+}) => {
+  await page.goto("/admin/properties");
+  await expect(page).toHaveURL("/");
+  await expect(
+    page.getByRole("heading", { name: "Emlak Platformu" }),
+  ).toBeVisible();
+});
+
 test("health endpoint returns the readiness envelope", async ({ request }) => {
   const response = await request.get("/api/health");
   expect(response.ok()).toBe(true);

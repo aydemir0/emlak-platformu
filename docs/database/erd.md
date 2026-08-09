@@ -2,13 +2,13 @@
 
 ## Scope
 
-These Mermaid diagrams cover all 44 tables. The overview shows ownership/dependency direction; bounded-context diagrams show table cardinalities. Logical references from analytics, audit, and outbox payloads are intentionally not polymorphic foreign keys. See [Relationships](relationships.md) for delete/restore rules, [Schema draft](schema-draft.md) for columns, [Entity catalog](entity-catalog.md) for lifecycle/security, and [Domain model](domain-model.md) for invariants.
+These Mermaid diagrams cover all 45 tables. The overview shows ownership/dependency direction; bounded-context diagrams show table cardinalities. Logical references from analytics, audit, and outbox payloads are intentionally not polymorphic foreign keys. See [Relationships](relationships.md) for delete/restore rules, [Schema draft](schema-draft.md) for columns, [Entity catalog](entity-catalog.md) for lifecycle/security, and [Domain model](domain-model.md) for invariants.
 
 ## Cross-domain overview
 
 ```mermaid
 flowchart LR
-  IA["Identity and access\n6 tables"] --> PR["Properties, catalogs, locations\n11 tables"]
+  IA["Identity and access\n6 tables"] --> PR["Properties, catalogs, locations\n12 tables"]
   IA --> CRM["Leads and customers\n8 tables"]
   PR --> MED["Property media\n4 tables"]
   PR --> CRM
@@ -24,7 +24,7 @@ flowchart LR
   SEO --> OPS
 ```
 
-The overview counts `public_route_reservations` in SEO/content and counts location slug history with the property/location context, totaling 44.
+The overview counts `public_route_reservations` in SEO/content and counts location slug history with the property/location context, totaling 45.
 
 ## Identity and access
 
@@ -74,6 +74,7 @@ erDiagram
 erDiagram
   listing_types ||--o{ properties : "classifies"
   property_types ||--o{ properties : "classifies"
+  heating_types ||--o{ properties : "heats"
   locations o|--o{ locations : "parent of"
   locations ||--o{ properties : "contains"
   properties ||--o{ property_state_history : "records"
@@ -97,11 +98,17 @@ erDiagram
     uuid id PK
     text code UK
   }
+  heating_types {
+    uuid id PK
+    text code UK
+    text status
+  }
   properties {
     uuid id PK
     text public_id UK
     uuid listing_type_id FK
     uuid property_type_id FK
+    uuid heating_type_id FK
     uuid location_id FK
     uuid current_route_reservation_id FK
     text current_slug
