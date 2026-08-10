@@ -39,6 +39,7 @@ const lead = {
 
 class FakeUow implements LeadCrmUnitOfWork {
   calls: string[] = [];
+  denials: Record<string, unknown>[] = [];
   current: LeadRecord = lead;
   advisorId = "60000000-0000-4000-8000-000000000001";
   readonly tx: LeadCrmTransaction = {
@@ -68,6 +69,10 @@ class FakeUow implements LeadCrmUnitOfWork {
     const value = await work(this.tx);
     this.calls.push("commit");
     return value;
+  }
+  async recordAuthorizationDenial(values: Record<string, unknown>) {
+    this.calls.push("denial-audit");
+    this.denials.push(values);
   }
 }
 
@@ -122,6 +127,14 @@ describe("lead CRM commands", () => {
         summary: "Not",
       }),
     ).rejects.toMatchObject({ code: "LEAD_FORBIDDEN" });
+    expect(uow.denials[0]).toMatchObject({
+      action: "lead.note_denied",
+      actorUserIdentityId: advisor.actor.identityId,
+      targetId: lead.id,
+      reasonCode: "LEAD_FORBIDDEN",
+      correlationId: advisor.correlationId,
+      requestId: advisor.requestId,
+    });
     await expect(
       assignLeadAdvisor(uow, advisor, {
         leadId: lead.id,
@@ -129,6 +142,8 @@ describe("lead CRM commands", () => {
         advisorId: null,
       }),
     ).rejects.toMatchObject({ code: "LEAD_FORBIDDEN" });
+    expect(uow.denials[1]).toMatchObject({ action: "lead.assignment_denied" });
+    expect(JSON.stringify(uow.denials)).not.toMatch(/Arandı|email|phone|name/i);
     uow.advisorId = lead.assignedAdvisorId;
     await addLeadNote(uow, advisor, {
       leadId: lead.id,

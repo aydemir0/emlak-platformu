@@ -55,5 +55,16 @@ describe("lead outbox boundary", () => {
         { notification: async () => {}, analytics: async () => {} },
       ),
     ).rejects.toThrow("LEAD_OUTBOX_PII");
+    await expect(
+      dispatchLeadOutboxMessage(
+        {
+          eventName: "lead.analytics_requested",
+          payload: { context: { phone: "+905551112233" } },
+          correlationId: "10000000-0000-4000-8000-000000000001",
+          idempotencyKey: "key",
+        },
+        { notification: async () => {}, analytics: async () => {} },
+      ),
+    ).rejects.toThrow("LEAD_OUTBOX_PII");
   });
 });

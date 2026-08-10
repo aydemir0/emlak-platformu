@@ -19,6 +19,17 @@ const ctx = {
   requestId: "crm-integration",
   idempotencyKey: randomUUID(),
 };
+const deniedCtx = {
+  ...ctx,
+  actor: {
+    identityId: randomUUID(),
+    authUserId: randomUUID(),
+    role: "ADVISOR" as const,
+    aal: "aal1" as const,
+  },
+  correlationId: randomUUID(),
+  requestId: "crm-denied-integration",
+};
 describe("Postgres lead CRM commands", () => {
   beforeAll(async () => {
     await pool.query(
@@ -28,6 +39,10 @@ describe("Postgres lead CRM commands", () => {
     await pool.query(
       "insert into public.leads(id,submission_id,status,source,email,consent_kind,consented_at,idempotency_key) values($1,$2,'NEW','test','crm@example.test','CONTACT',now(),$3)",
       [leadId, randomUUID(), randomUUID()],
+    );
+    await pool.query(
+      "insert into public.user_identities(id,auth_provider,provider_subject,status) values($1,'integration',$2,'active')",
+      [deniedCtx.actor.identityId, `crm-${deniedCtx.actor.identityId}`],
     );
   });
   afterAll(async () => {
@@ -41,6 +56,9 @@ describe("Postgres lead CRM commands", () => {
     await pool.query("delete from public.leads where id=$1", [leadId]);
     await pool.query("delete from public.user_identities where id=$1", [
       ctx.actor.identityId,
+    ]);
+    await pool.query("delete from public.user_identities where id=$1", [
+      deniedCtx.actor.identityId,
     ]);
     await pool.query("set session_replication_role = origin");
     await pool.end();
@@ -59,6 +77,28 @@ describe("Postgres lead CRM commands", () => {
       status: "CONTACTED",
       activities: 1,
       audits: 1,
+    });
+  });
+  it("persists a PII-free authorization denial after the command transaction rolls back", async () => {
+    await expect(
+      changeLeadStatus(new PostgresLeadCrmUnitOfWork(pool), deniedCtx, {
+        leadId,
+        expectedVersion: 2n,
+        status: "QUALIFIED",
+      }),
+    ).rejects.toMatchObject({ code: "LEAD_FORBIDDEN" });
+    const audit = await pool.query(
+      "select actor_user_identity_id,action,outcome,reason_code,correlation_id,request_id,change_summary from public.audit_logs where target_id=$1 and action='lead.status_denied'",
+      [leadId],
+    );
+    expect(audit.rows[0]).toEqual({
+      actor_user_identity_id: deniedCtx.actor.identityId,
+      action: "lead.status_denied",
+      outcome: "denied",
+      reason_code: "LEAD_FORBIDDEN",
+      correlation_id: deniedCtx.correlationId,
+      request_id: deniedCtx.requestId,
+      change_summary: {},
     });
   });
 });

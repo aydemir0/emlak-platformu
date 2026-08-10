@@ -96,14 +96,16 @@ class Tx implements LeadCrmTransaction {
   }
   async insertAudit(v: Record<string, unknown>) {
     await this.c.query(
-      "insert into public.audit_logs(actor_user_identity_id,action,target_type,target_id,outcome,correlation_id,request_id,change_summary) values($1,$2,'lead',$3,'succeeded',$4,$5,$6)",
+      "insert into public.audit_logs(actor_user_identity_id,action,target_type,target_id,outcome,correlation_id,request_id,change_summary,reason_code) values($1,$2,'lead',$3,$4,$5,$6,$7,$8)",
       [
         v.actorUserIdentityId ?? null,
         v.action,
         v.targetId,
+        v.outcome ?? "succeeded",
         v.correlationId,
         v.requestId,
         JSON.stringify(v.changeSummary ?? {}),
+        v.reasonCode ?? null,
       ],
     );
   }
@@ -123,6 +125,21 @@ export class PostgresLeadCrmUnitOfWork implements LeadCrmUnitOfWork {
     } finally {
       c.release();
     }
+  }
+  async recordAuthorizationDenial(
+    values: Parameters<LeadCrmUnitOfWork["recordAuthorizationDenial"]>[0],
+  ) {
+    await this.pool.query(
+      "insert into public.audit_logs(actor_user_identity_id,action,target_type,target_id,outcome,correlation_id,request_id,change_summary,reason_code) values($1,$2,'lead',$3,'denied',$4,$5,'{}'::jsonb,$6)",
+      [
+        values.actorUserIdentityId,
+        values.action,
+        values.targetId,
+        values.correlationId,
+        values.requestId,
+        values.reasonCode,
+      ],
+    );
   }
 }
 export type LeadListQuery = Readonly<{
