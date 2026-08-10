@@ -37,3 +37,12 @@ test("health endpoint returns the readiness envelope", async ({ request }) => {
     checks: { application: "ready" },
   });
 });
+
+test("public listing filter is server-rendered with noindex", async ({ page }) => {
+  const response = await page.goto("/satilik?city=ankara&page=2");
+  expect(response?.status()).toBe(200);
+  await expect(page.locator('meta[name="robots"]')).toHaveAttribute(
+    "content",
+    "noindex, follow",
+  );
+});
