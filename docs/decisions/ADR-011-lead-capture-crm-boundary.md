@@ -1,6 +1,6 @@
 # ADR-011: Lead capture and CRM boundary
 
-- **Status:** Accepted for Phase 8 design
+- **Status:** Accepted and implemented for Phase 8
 - **Date:** 2026-08-10
 
 ## Context
@@ -9,7 +9,7 @@ Public property enquiries cross an anonymous-to-PII trust boundary. The platform
 
 ## Decision
 
-Use an independent lead per accepted public submission, with exact idempotency-key retry only. Keep raw and normalized contact values with versioned provenance, create duplicate candidates without automatic merge/linking, use separate append-only `lead_activities`, and keep new leads unassigned until an ADMIN explicitly assigns them. Enforce the locked lifecycle and ADMIN-only explicit customer conversion. Deliver notifications/analytics through the post-commit outbox.
+Use an independent lead per accepted public submission, with exact idempotency-key retry only. Keep raw and normalized contact values with versioned provenance, create duplicate candidates without automatic merge/linking, use separate append-only `lead_activities` and `lead_assignment_history`, and keep new leads unassigned until an ADMIN explicitly assigns them. Enforce the locked lifecycle. Deliver PII-minimized notifications/analytics through a post-commit, lease-backed PostgreSQL outbox. Customer conversion remains a future ADMIN-only boundary, not a Phase 8 implementation.
 
 ## Alternatives considered
 
@@ -20,7 +20,7 @@ Use an independent lead per accepted public submission, with exact idempotency-k
 
 ## Consequences
 
-Operations receive a clear intake timeline and explicit assignment responsibility. Duplicate review adds staff work but prevents irreversible identity mistakes. The design adds normalized-intake, activity, and possibly assignment-history records rather than overloading existing tables.
+Operations receive a clear intake timeline and explicit assignment responsibility. Duplicate review adds staff work but prevents irreversible identity mistakes. The implementation adds normalized-intake, activity, and assignment-history records rather than overloading existing tables.
 
 ## Security and privacy impact
 
@@ -36,4 +36,4 @@ Implement with additive reviewed migrations: new activity/intake/history structu
 
 ## Open decisions
 
-See [lead capture and CRM foundation requirements](../requirements/lead-capture-crm-foundation.md) for consent, retention, duplicate-review, notification, CAPTCHA, and assignment-history decisions.
+See [lead capture and CRM foundation requirements](../requirements/lead-capture-crm-foundation.md) for consent, retention, duplicate-review, notification, CAPTCHA, and worker-operation decisions.

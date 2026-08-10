@@ -7,6 +7,8 @@ const publicValues = {
   NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:55321",
   NEXT_PUBLIC_SUPABASE_ANON_KEY: "local-public-anon-key-for-tests",
 };
+const leadIntakeHmacSecret =
+  "lead-intake-test-secret-with-at-least-32-characters";
 
 describe("environment boundaries", () => {
   it("returns only public-safe Supabase values from client configuration", () => {
@@ -30,6 +32,7 @@ describe("environment boundaries", () => {
       parseServerEnv({
         ...publicValues,
         SUPABASE_SERVICE_ROLE_KEY: "server-only-service-role-key",
+        LEAD_INTAKE_HMAC_SECRET: leadIntakeHmacSecret,
         LOCAL_DATABASE_URL:
           "postgresql://postgres:postgres@127.0.0.1:55322/postgres",
       }),
@@ -43,6 +46,7 @@ describe("environment boundaries", () => {
       parseServerEnv({
         ...publicValues,
         SUPABASE_SERVICE_ROLE_KEY: "server-only-service-role-key",
+        LEAD_INTAKE_HMAC_SECRET: leadIntakeHmacSecret,
         LOCAL_DATABASE_URL:
           "postgresql://postgres:secret@example.supabase.co:5432/postgres",
       }),
@@ -55,6 +59,7 @@ describe("environment boundaries", () => {
     const base = {
       ...publicValues,
       SUPABASE_SERVICE_ROLE_KEY: "server-only-service-role-key",
+      LEAD_INTAKE_HMAC_SECRET: leadIntakeHmacSecret,
       LOCAL_DATABASE_URL:
         "postgresql://postgres:postgres@127.0.0.1:55322/postgres",
     };

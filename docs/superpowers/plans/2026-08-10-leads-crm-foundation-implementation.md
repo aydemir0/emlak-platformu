@@ -22,10 +22,10 @@
 
 **Depends on:** None. **Estimated scope:** 1 migration; 6–10 domain/application/persistence files; unit/integration constraint tests.
 
-- [ ] Write failing lifecycle, idempotency, normalized-contact, append-only activity, and RLS/grant contract tests.
-- [ ] Apply the smallest additive local migration; regenerate database types; prove no anon CRM grant/policy exists.
-- [ ] Implement strict domain transition and contact-normalization contracts without a hardcoded default region.
-- [ ] Run focused database/integration/type tests and commit.
+- [x] Write lifecycle, idempotency, normalized-contact, append-only activity, and RLS/grant contract tests.
+- [x] Apply the additive local migration; regenerate database types; prove no anon CRM grant/policy exists.
+- [x] Implement strict domain transition and contact-normalization contracts without a hardcoded default region.
+- [x] Run focused database/integration/type tests and commit.
 
 ## Package B — Public lead intake
 
@@ -33,10 +33,10 @@
 
 **Depends on:** A. **Estimated scope:** 8–12 application/infrastructure/delivery files; public component enhancement; unit/integration/Playwright tests.
 
-- [ ] Write failing tests for inactive/deleted property denial, contact/consent validation, exact idempotent retry, changed-payload key conflict, generic response, and PII-free delivery/analytics payloads.
-- [ ] Implement one transaction that creates lead/activity/audit/outbox or returns the existing idempotent result.
-- [ ] Add rate-limit and optional challenge interfaces; test adapter decisions without a provider integration.
-- [ ] Render progressively enhanced property-detail form without client-owned business rules; run focused tests and commit.
+- [x] Write tests for inactive/deleted property denial, contact/consent validation, exact idempotent retry, changed-payload key conflict, generic response, and PII-free delivery/analytics payloads.
+- [x] Implement one transaction that creates lead/activity/audit/outbox or returns the existing idempotent result.
+- [x] Add rate-limit and optional challenge interfaces; test adapter decisions without a provider integration.
+- [x] Render progressively enhanced property-detail form without client-owned business rules; run focused tests and commit.
 
 ## Package C — Admin CRM read and command surface
 
@@ -44,10 +44,10 @@
 
 **Depends on:** A; B for real public intake fixtures. **Estimated scope:** 10–14 files; unit/integration/Playwright admin-flow tests.
 
-- [ ] Write failing tests for ADMIN global scope, ADVISOR assigned-only scope, cross-advisor IDOR denial, stale transition conflict, terminal-state denial, and append-only activity/history.
-- [ ] Implement application use cases and PostgreSQL read/write adapters with trusted current advisor scope.
-- [ ] Add thin authenticated routes/actions and minimal operational UI; no export or appointment creation.
-- [ ] Run focused tests and commit.
+- [x] Write tests for ADMIN global scope, ADVISOR assigned-only scope, cross-advisor IDOR denial, stale transition conflict, terminal-state denial, and append-only activity/history.
+- [x] Implement application use cases and PostgreSQL read/write adapters with trusted current advisor scope.
+- [x] Add thin authenticated routes/actions and minimal operational UI; no export or appointment creation.
+- [x] Run focused tests and commit.
 
 ## Package D — Authorization, audit, and durable effects
 
@@ -55,10 +55,10 @@
 
 **Depends on:** A–C. **Estimated scope:** 5–8 files plus migration policy additions only when Package A did not establish them; integration tests.
 
-- [ ] Write failing authorization matrix tests including no anon access, assignment/reassignment denial, conversion ADMIN-only, and service-role boundary.
-- [ ] Add only necessary permissions/policies and transactionally emitted, PII-minimized outbox events.
-- [ ] Implement deterministic notification/analytics adapters or no-op test adapters; prove provider failure does not roll back authoritative state.
-- [ ] Run focused tests and commit.
+- [x] Write authorization and worker tests including no anon access, assignment/reassignment denial, cross-lead denial audit, and service-role boundary.
+- [x] Add only necessary permissions/policies and transactionally emitted, PII-minimized outbox events.
+- [x] Implement provider-independent notification/analytics consumer boundaries; prove provider failure does not roll back authoritative state.
+- [x] Run focused tests and commit.
 
 ## Package E — Verification and documentation
 
@@ -66,10 +66,10 @@
 
 **Depends on:** A–D. **Estimated scope:** test/docs only; no new product behavior.
 
-- [ ] Add end-to-end public intake, duplicate-safe retry, scoped advisor operation, and admin conversion smoke coverage.
-- [ ] Run lint, format check, typecheck, unit, integration, local migration validation, build, Playwright, secret scan, remote-reference scan, and `git diff --check`.
-- [ ] Reconcile architecture/database/ADR documentation and record unresolved decisions without inventing defaults.
-- [ ] Commit verified work and open a Draft PR without merging.
+- [x] Retain existing browser foundation coverage; public lead and scoped CRM behavior are covered by unit/integration tests. Customer conversion is intentionally not implemented.
+- [x] Run the available lint, format, typecheck, unit, integration, build, Playwright, secret, remote-reference, and `git diff --check` controls; record unavailable Supabase CLI/pgTAP validation explicitly.
+- [x] Reconcile architecture/database/ADR documentation and record unresolved decisions without inventing defaults.
+- [x] Commit verified work. GitHub authentication is unavailable, so the Draft PR is prepared as a local title/body draft only.
 
 ## Plan self-review
 

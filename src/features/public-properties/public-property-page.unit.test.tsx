@@ -41,7 +41,7 @@ describe("public property detail page", () => {
     );
   });
 
-  it("server-renders public facts and a disabled placeholder CTA", () => {
+  it("server-renders public facts and the lead-capture CTA", () => {
     render(<PublicPropertyDetailView property={publicPropertyDetailFixture} />);
 
     expect(
@@ -52,7 +52,7 @@ describe("public property detail page", () => {
     );
     expect(
       screen.getByRole("button", { name: "Danışmana ulaş" }),
-    ).toBeDisabled();
+    ).toBeEnabled();
   });
 
   it("never copies non-EXACT hidden fields into HTML, metadata, or JSON-LD", () => {

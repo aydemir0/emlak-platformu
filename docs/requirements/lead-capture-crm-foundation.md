@@ -4,6 +4,19 @@
 
 Define the Phase 8 public property enquiry to staff CRM boundary. It creates auditable, privacy-minimized leads without exposing CRM tables to anonymous visitors or treating contact similarity as a customer identity decision.
 
+## Implementation status
+
+Phase 8 is implemented on `agent/leads-crm-foundation`: public intake, exact idempotency, duplicate-candidate evidence, scoped staff CRM, lifecycle commands, ADMIN-only assignment, append-only evidence, denial audit, and the PostgreSQL-backed outbox worker. Customer conversion and appointments remain deferred.
+
+## Verification record
+
+- Full unit suite: 148 tests across 41 files passed.
+- Full local PostgreSQL integration suite: 27 tests across 10 files passed.
+- Typecheck, ESLint, production build, and changed-file format checks passed.
+- The existing five Playwright scenarios passed before the runner's local server teardown timed out. A separate rerun was blocked by the environment's process-start policy.
+- The repository-wide format check reports pre-existing formatting drift in unrelated files; it was not mass-reformatted during this closing package.
+- `npm audit` could not reach the npm audit endpoint in this environment. Supabase CLI and pgTAP are unavailable, and Docker API access is denied; clean reset, migration replay, and regenerated-type production drift verification remain outstanding.
+
 ## Confirmed decisions
 
 - Each accepted real public submission creates an independent `lead`. Only an exact retry with the same idempotency key deduplicates.
@@ -14,8 +27,8 @@ Define the Phase 8 public property enquiry to staff CRM boundary. It creates aud
 - New public leads may be unassigned. There is no auto-assignment. Only ADMIN assigns or reassigns; ADVISOR sees and changes only leads currently assigned to that advisor.
 - Public input requires property ID, at least one of phone/email, consent accepted, and idempotency key. Name and message are optional. Identity/customer/advisor IDs are never client-controlled.
 - Accepted and duplicate-safe public responses are generic and non-enumerating.
-- Conversion is an explicit ADMIN-only command in Phase 8. Advisor conversion remains deferred.
-- Notifications use the transactional outbox after commit. A notification failure cannot roll back lead creation.
+- Customer conversion is a future ADMIN-only command boundary; it is not implemented in Phase 8. Advisor conversion remains deferred.
+- Notifications and analytics use the transactional outbox after commit. Atomic PostgreSQL claims use leases; success marks `PROCESSED`, retryable failure returns to `PENDING`, non-retryable failure enters `DEAD_LETTER`, and expired leases are reclaimable. Provider calls remain outside database transactions and receive the outbox idempotency key.
 - Analytics events are PII-free. No email, phone, name, message, address, or raw lead ID enters GA4 or equivalent systems.
 - Appointment creation is excluded. Phase 8 exposes only a future integration contract.
 
@@ -25,7 +38,7 @@ Define the Phase 8 public property enquiry to staff CRM boundary. It creates aud
 
 `lead_activities` is append-only and references one lead. Required activity types: `CREATED`, `NOTE_ADDED`, `STATUS_CHANGED`, `ASSIGNMENT_CHANGED`, `DUPLICATE_CANDIDATE_DETECTED`, `CONTACT_ATTEMPTED`, and `CONVERSION_RECORDED`. Each row records actor/source, safe structured details, occurred time, correlation ID, and an idempotency key where the originating command is retryable. Notes are bounded PII-bearing free text with purpose-limited access.
 
-`lead_assignment_history` is append-only if the existing audit log cannot safely answer who changed assignment, from which advisor, to which advisor, why, and when without storing excess PII. It must never be reconstructed from mutable `leads.assigned_advisor_id`.
+`lead_assignment_history` is append-only assignment evidence. It must never be reconstructed from mutable `leads.assigned_advisor_id`.
 
 Normalized intake/contact candidate records retain raw display value, normalized comparison value when unambiguous, contact channel, algorithm/version, provenance, and verification state. They permit candidate lookup but are not globally unique for unverified/shared data.
 
@@ -53,18 +66,18 @@ The transaction validates input and consent, checks idempotency by a server-boun
 
 Every transition checks current state and expected lead version, updates `leads.version`, appends `STATUS_CHANGED`, writes audit evidence, and enqueues only required post-commit effects in one transaction. Unlisted transitions and terminal-state edits fail with typed application errors. Assignment has its own expected-version update plus `ASSIGNMENT_CHANGED` and append-only assignment evidence.
 
-Duplicate-candidate detection runs inside intake/conversion use cases using bounded normalized contact lookups. It may append `DUPLICATE_CANDIDATE_DETECTED`; it never mutates a candidate lead/customer or reveals the candidate to the public actor.
+Duplicate-candidate detection runs inside intake using bounded normalized contact lookups. It may append `DUPLICATE_CANDIDATE_DETECTED`; it never mutates a candidate lead/customer or reveals the candidate to the public actor.
 
 ## Authorization and RLS
 
-| Action | ADMIN | ADVISOR | Public |
-| --- | --- | --- | --- |
-| Create lead | no direct table write | no direct table write | narrow server use case only |
-| Read/list/detail | all permitted operational leads | assigned active leads only | none |
-| Update status/note | permitted | assigned lead only | none |
-| Assign/reassign | permitted | denied | none |
-| Convert to customer | permitted explicit command | deferred | denied |
-| Delete/restore/export/audit | permitted by explicit admin operation | denied | denied |
+| Action                      | ADMIN                                 | ADVISOR                    | Public                      |
+| --------------------------- | ------------------------------------- | -------------------------- | --------------------------- |
+| Create lead                 | no direct table write                 | no direct table write      | narrow server use case only |
+| Read/list/detail            | all permitted operational leads       | assigned active leads only | none                        |
+| Update status/note          | permitted                             | assigned lead only         | none                        |
+| Assign/reassign             | permitted                             | denied                     | none                        |
+| Convert to customer         | deferred                              | deferred                   | denied                      |
+| Delete/restore/export/audit | permitted by explicit admin operation | denied                     | denied                      |
 
 All CRM tables remain RLS-enabled and deny-by-default. Anon receives no CRM base-table grant or policy. Application authorization derives advisor scope from trusted database relationships, never payload fields or mutable client claims.
 
@@ -76,14 +89,11 @@ Outbox messages use reference-first, PII-minimized payloads and re-read authorit
 
 The future appointment contract may consume a qualified lead/customer identity, assigned advisor, optional property reference, correlation ID, and requested intent. It cannot create an appointment, reserve availability, or bypass the appointment exclusion constraint in this phase.
 
-## Required future migration scope
+## Implemented schema scope
 
-- align the `leads` lifecycle constraint with the locked states;
-- add normalized contact intake/provenance and idempotency/fingerprint fields with explicit privacy/retention behavior;
-- add append-only `lead_activities` and, if needed after audit review, `lead_assignment_history`;
-- add pseudonymized abuse-signal storage only where it is necessary and retention-governed;
-- add only query-driven indexes for idempotency, advisor/status/updated lead lists, property/created lead lists, and duplicate-candidate lookup;
-- add RLS/grants/constraint tests without granting anon CRM base-table access.
+- `20260810150000_lead_crm_foundation.sql` aligns lifecycle values; adds idempotency fingerprint and pseudonymized abuse signal fields, normalized contact intakes, append-only activities/assignment history, query-driven indexes, RLS, and grants.
+- `20260810150001_enforce_lead_lifecycle.sql` applies the authoritative transition trigger and keeps CRM writes server-mediated.
+- `20260810160000_lead_activity_details.sql` adds safe structured activity details.
 
 ## Open decisions
 
@@ -93,4 +103,4 @@ The future appointment contract may consume a qualified lead/customer identity, 
 - Lost/outcome reason vocabulary and whether a future reopen workflow is ever required.
 - Notification recipients, template policy, retry/SLO, and provider selection.
 - CAPTCHA provider, activation criteria, and rate-limit thresholds.
-- Whether `lead_assignment_history` is required in addition to audit logs after an audit-payload review.
+- Worker identity/attempt fencing and operational retry budget/backoff configuration.
