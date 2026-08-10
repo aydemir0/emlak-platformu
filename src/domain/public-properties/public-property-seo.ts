@@ -164,6 +164,22 @@ export function buildCanonicalListingPath(
   search: PublicSearchParams,
 ): string {
   const query = new URLSearchParams();
+  const canonicalMinPrice =
+    Number.isSafeInteger(search.minPrice) &&
+    search.minPrice >= 0 &&
+    search.minPrice <= MAXIMUM_PRICE_MINOR
+      ? search.minPrice
+      : undefined;
+  const canonicalMaxPrice =
+    Number.isSafeInteger(search.maxPrice) &&
+    search.maxPrice >= 0 &&
+    search.maxPrice <= MAXIMUM_PRICE_MINOR
+      ? search.maxPrice
+      : undefined;
+  const hasReversedCanonicalPriceRange =
+    canonicalMinPrice !== undefined &&
+    canonicalMaxPrice !== undefined &&
+    canonicalMinPrice > canonicalMaxPrice;
   appendQueryValue(query, "city", normalizeSlug(search.city ?? ""));
   appendQueryValue(query, "district", normalizeSlug(search.district ?? ""));
   appendQueryValue(
@@ -174,20 +190,12 @@ export function buildCanonicalListingPath(
   appendQueryValue(
     query,
     "minPrice",
-    Number.isSafeInteger(search.minPrice) &&
-      search.minPrice >= 0 &&
-      search.minPrice <= MAXIMUM_PRICE_MINOR
-      ? search.minPrice
-      : undefined,
+    hasReversedCanonicalPriceRange ? undefined : canonicalMinPrice,
   );
   appendQueryValue(
     query,
     "maxPrice",
-    Number.isSafeInteger(search.maxPrice) &&
-      search.maxPrice >= 0 &&
-      search.maxPrice <= MAXIMUM_PRICE_MINOR
-      ? search.maxPrice
-      : undefined,
+    hasReversedCanonicalPriceRange ? undefined : canonicalMaxPrice,
   );
   appendQueryValue(
     query,

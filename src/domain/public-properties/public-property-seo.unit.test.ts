@@ -55,4 +55,14 @@ describe("public property SEO policy", () => {
       }),
     ).toEqual({ page: 1, roomCount: 3 });
   });
+
+  it("omits a reversed price range from the canonical listing path", () => {
+    expect(
+      buildCanonicalListingPath("SATILIK", {
+        minPrice: 2_000_000,
+        maxPrice: 1_000_000,
+        page: 1,
+      }),
+    ).toBe("/satilik");
+  });
 });
