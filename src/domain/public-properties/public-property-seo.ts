@@ -164,18 +164,16 @@ export function buildCanonicalListingPath(
   search: PublicSearchParams,
 ): string {
   const query = new URLSearchParams();
-  const canonicalMinPrice =
-    Number.isSafeInteger(search.minPrice) &&
-    search.minPrice >= 0 &&
-    search.minPrice <= MAXIMUM_PRICE_MINOR
-      ? search.minPrice
-      : undefined;
-  const canonicalMaxPrice =
-    Number.isSafeInteger(search.maxPrice) &&
-    search.maxPrice >= 0 &&
-    search.maxPrice <= MAXIMUM_PRICE_MINOR
-      ? search.maxPrice
-      : undefined;
+  const canonicalMinPrice = parseBoundedInteger(
+    search.minPrice?.toString(),
+    0,
+    MAXIMUM_PRICE_MINOR,
+  );
+  const canonicalMaxPrice = parseBoundedInteger(
+    search.maxPrice?.toString(),
+    0,
+    MAXIMUM_PRICE_MINOR,
+  );
   const hasReversedCanonicalPriceRange =
     canonicalMinPrice !== undefined &&
     canonicalMaxPrice !== undefined &&
@@ -200,11 +198,11 @@ export function buildCanonicalListingPath(
   appendQueryValue(
     query,
     "roomCount",
-    Number.isSafeInteger(search.roomCount) &&
-      search.roomCount >= 1 &&
-      search.roomCount <= MAXIMUM_ROOM_COUNT
-      ? search.roomCount
-      : undefined,
+    parseBoundedInteger(
+      search.roomCount?.toString(),
+      1,
+      MAXIMUM_ROOM_COUNT,
+    ),
   );
   appendQueryValue(
     query,
