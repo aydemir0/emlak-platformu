@@ -198,11 +198,7 @@ export function buildCanonicalListingPath(
   appendQueryValue(
     query,
     "roomCount",
-    parseBoundedInteger(
-      search.roomCount?.toString(),
-      1,
-      MAXIMUM_ROOM_COUNT,
-    ),
+    parseBoundedInteger(search.roomCount?.toString(), 1, MAXIMUM_ROOM_COUNT),
   );
   appendQueryValue(
     query,

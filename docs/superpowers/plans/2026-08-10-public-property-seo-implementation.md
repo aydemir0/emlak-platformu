@@ -23,19 +23,25 @@
 ### Task 1: Define public contracts and deterministic SEO policy
 
 **Files:**
+
 - Create: `src/domain/public-properties/public-property-seo.ts`
 - Create: `src/application/public-properties/public-property-contracts.ts`
 - Test: `src/domain/public-properties/public-property-seo.unit.test.ts`
 
 **Interfaces:**
+
 - Produces `parsePublicSearchParams`, `buildCanonicalListingPath`, `getIndexability`, `buildPropertyCanonicalPath`, and redacted public property/media types.
 
 - [ ] **Step 1: Write failing SEO-policy tests**
 
 ```ts
 expect(getIndexability({ hasFilters: true, page: 1 })).toEqual("NOINDEX");
-expect(buildCanonicalListingPath("SATILIK", { city: "Ankara", page: 1 })).toBe("/satilik?city=ankara");
-expect(buildPropertyCanonicalPath(model)).toBe("/satilik/ankara/cankaya/daire/ornek-ilan");
+expect(buildCanonicalListingPath("SATILIK", { city: "Ankara", page: 1 })).toBe(
+  "/satilik?city=ankara",
+);
+expect(buildPropertyCanonicalPath(model)).toBe(
+  "/satilik/ankara/cankaya/daire/ornek-ilan",
+);
 ```
 
 - [ ] **Step 2: Run the focused test and confirm it fails because the policy module is absent.**
@@ -47,6 +53,7 @@ expect(buildPropertyCanonicalPath(model)).toBe("/satilik/ankara/cankaya/daire/or
 ### Task 2: Add public read port and redaction-aware PostgreSQL adapter
 
 **Files:**
+
 - Create: `src/application/public-properties/public-property-read-ports.ts`
 - Create: `src/application/public-properties/get-public-property.ts`
 - Create: `src/application/public-properties/list-public-properties.ts`
@@ -54,6 +61,7 @@ expect(buildPropertyCanonicalPath(model)).toBe("/satilik/ankara/cankaya/daire/or
 - Test: `src/infrastructure/public-properties/postgres-public-property-read-repository.integration.test.ts`
 
 **Interfaces:**
+
 - `PublicPropertyReadRepository.getByRoute(route): Promise<PublicRouteResolution>`
 - `PublicPropertyReadRepository.list(query): Promise<PublicPropertyPage>`
 - `PublicPropertyReadRepository.listSitemapEntries(): Promise<PublicSitemapEntry[]>`
@@ -61,10 +69,17 @@ expect(buildPropertyCanonicalPath(model)).toBe("/satilik/ankara/cankaya/daire/or
 - [ ] **Step 1: Write failing integration tests for ACTIVE visibility, media eligibility, historical redirect, and non-EXACT redaction.**
 
 ```ts
-expect(await repository.getByRoute(currentRoute)).toMatchObject({ kind: "PROPERTY" });
-expect(await repository.getByRoute(oldRoute)).toMatchObject({ kind: "REDIRECT", status: 301 });
+expect(await repository.getByRoute(currentRoute)).toMatchObject({
+  kind: "PROPERTY",
+});
+expect(await repository.getByRoute(oldRoute)).toMatchObject({
+  kind: "REDIRECT",
+  status: 301,
+});
 expect(model.location).not.toHaveProperty("addressLine");
-expect(model.media.flatMap((item) => item.variants)).not.toContainEqual(expect.objectContaining({ visibility: "PRIVATE" }));
+expect(model.media.flatMap((item) => item.variants)).not.toContainEqual(
+  expect.objectContaining({ visibility: "PRIVATE" }),
+);
 ```
 
 - [ ] **Step 2: Run the integration test and confirm it fails because the repository is absent.**
@@ -78,6 +93,7 @@ The SQL must join current property route reservation, listing/property types, ci
 ### Task 3: Render public listing/detail routes and SEO signals
 
 **Files:**
+
 - Create: `src/app/(public)/[listingType]/page.tsx`
 - Create: `src/app/(public)/[listingType]/[city]/[district]/[propertyType]/[slug]/page.tsx`
 - Create: `src/features/public-properties/components/public-property-card.tsx`
@@ -87,13 +103,16 @@ The SQL must join current property route reservation, listing/property types, ci
 - Test: route/component unit tests under `src/features/public-properties/`
 
 **Interfaces:**
+
 - Consumes only `PublicPropertyPage` and `PublicPropertyDetail` contracts.
 - Produces server-rendered HTML and `generateMetadata` from the same model.
 
 - [ ] **Step 1: Write failing render tests.**
 
 ```tsx
-expect(await screen.findByRole("heading", { name: detail.title })).toBeVisible();
+expect(
+  await screen.findByRole("heading", { name: detail.title }),
+).toBeVisible();
 expect(screen.queryByText(detail.location.addressLine ?? "")).toBeNull();
 expect(screen.getAllByRole("img")[0]).toHaveAttribute("srcSet");
 ```
@@ -107,6 +126,7 @@ expect(screen.getAllByRole("img")[0]).toHaveAttribute("srcSet");
 ### Task 4: Implement redirect, robots, and sitemap delivery boundaries
 
 **Files:**
+
 - Create: `src/app/sitemap.ts`
 - Modify: public detail route from Task 3
 - Test: `src/app/sitemap.unit.test.ts`, detail-route tests
@@ -128,6 +148,7 @@ expect(entries.map((entry) => entry.url)).not.toContain(oldUrl);
 ### Task 5: Browser verification and documentation
 
 **Files:**
+
 - Modify: `tests/e2e/foundation.spec.ts` or create `tests/e2e/public-property.spec.ts`
 - Modify: `docs/requirements/public-property-seo.md`
 - Modify: `docs/architecture/seo-architecture.md` only if implementation resolves an architecture ambiguity
