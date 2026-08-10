@@ -1,6 +1,6 @@
 # Customer, lead, request, appointment, and match data design
 
-**Status:** Proposed Phase 2 design; documentation only. Contact normalization is a design contract, not an implementation.
+**Status:** Phase 2 baseline, reconciled with implemented Phase 8 lead foundation. Customer, request, appointment, match, and conversion sections remain design contracts unless explicitly marked implemented.
 
 ## Purpose and ownership
 
@@ -8,25 +8,25 @@ Leads capture inbound interest; Customers own canonical people/contact records; 
 
 ## Canonical records and relationships
 
-| Table | Responsibility and important invariants |
-| --- | --- |
-| `leads` | One inbound acquisition/triage record with source, purpose-limited contact input, consent evidence/reference, assigned advisor, lifecycle, idempotency key, version, and deletion metadata. A lead is never the canonical customer. |
-| `lead_conversions` | Immutable conversion/link transaction record: lead, resulting customer, idempotency key, actor, outcome, safe resolution/duplicate evidence, timestamp, and correlation ID. One successful conversion per lead; repeated identical commands return it. |
-| `customers` | Stable canonical person identity, privacy/lifecycle state, version, merge survivor status, timestamps, and soft-delete metadata. Contact values live in `customer_contact_points`. |
-| `customer_contact_points` | Display and normalized contact values, type, verification/provenance, canonical-match eligibility, consent/purpose, version, and deletion metadata. Normalized values are sensitive and access-controlled. |
-| `customer_merge_history` | Append-only reviewed merges: survivor, absorbed customer, actor, reason/evidence, before references, timestamp, and correlation ID. No merge occurs from normalization alone. |
-| `customer_requests` | A customer's durable search/service requirement with independent lifecycle/version, intent, commercial/location constraints, consent/source, assignment, and deletion metadata. One customer may have many concurrent or historical requests. |
-| `customer_request_features` | Explicit requested-feature junction with preference strength/required flag and provenance. Composite uniqueness prevents duplicate feature entries per request. |
-| `customer_activities` | Append-only purpose-limited timeline facts (contact, note reference, status event, outcome), actor/source, customer and optional lead/request/property/appointment references. Free text is minimized and separately protected. |
-| `appointments` | Scheduled interaction with customer, optional request/property, advisor, start/end instants, timezone/display context, status, version, and deletion metadata. End is after start. |
-| `property_customer_matches` | Advisory link across property, customer, and request, deterministic rule/version, score/explanation summary, lifecycle, reviewer, timestamps, and version. |
-| `property_customer_match_reasons` | Structured deterministic reason codes/facts for a match. It cannot contain unverifiable AI claims or unnecessary PII. |
+| Table                             | Responsibility and important invariants                                                                                                                                                                                                                |
+| --------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `leads`                           | One inbound acquisition/triage record with source, purpose-limited contact input, consent evidence/reference, assigned advisor, lifecycle, idempotency key, version, and deletion metadata. A lead is never the canonical customer.                    |
+| `lead_conversions`                | Immutable conversion/link transaction record: lead, resulting customer, idempotency key, actor, outcome, safe resolution/duplicate evidence, timestamp, and correlation ID. One successful conversion per lead; repeated identical commands return it. |
+| `customers`                       | Stable canonical person identity, privacy/lifecycle state, version, merge survivor status, timestamps, and soft-delete metadata. Contact values live in `customer_contact_points`.                                                                     |
+| `customer_contact_points`         | Display and normalized contact values, type, verification/provenance, canonical-match eligibility, consent/purpose, version, and deletion metadata. Normalized values are sensitive and access-controlled.                                             |
+| `customer_merge_history`          | Append-only reviewed merges: survivor, absorbed customer, actor, reason/evidence, before references, timestamp, and correlation ID. No merge occurs from normalization alone.                                                                          |
+| `customer_requests`               | A customer's durable search/service requirement with independent lifecycle/version, intent, commercial/location constraints, consent/source, assignment, and deletion metadata. One customer may have many concurrent or historical requests.          |
+| `customer_request_features`       | Explicit requested-feature junction with preference strength/required flag and provenance. Composite uniqueness prevents duplicate feature entries per request.                                                                                        |
+| `customer_activities`             | Append-only purpose-limited timeline facts (contact, note reference, status event, outcome), actor/source, customer and optional lead/request/property/appointment references. Free text is minimized and separately protected.                        |
+| `appointments`                    | Scheduled interaction with customer, optional request/property, advisor, start/end instants, timezone/display context, status, version, and deletion metadata. End is after start.                                                                     |
+| `property_customer_matches`       | Advisory link across property, customer, and request, deterministic rule/version, score/explanation summary, lifecycle, reviewer, timestamps, and version.                                                                                             |
+| `property_customer_match_reasons` | Structured deterministic reason codes/facts for a match. It cannot contain unverifiable AI claims or unnecessary PII.                                                                                                                                  |
 
 `customer_requests` must have a uniqueness key usable for `(id, customer_id)`. `property_customer_matches(request_id, customer_id)` references that composite identity, while `property_id` references `properties`; therefore a match cannot attach a customer's request to a different customer. A business uniqueness rule prevents duplicate active match rows for the same property/customer/request/rule version. Reasons reference the match and remain consistent with its three-way identity.
 
 ## Lifecycle contracts and invalid transitions
 
-Proposed lead states are `NEW`, `TRIAGED`, `QUALIFIED`, `DISQUALIFIED`, `CONVERTED`, `ARCHIVED`. Allowed transitions are `NEW -> TRIAGED`, `NEW -> ARCHIVED`, `TRIAGED -> QUALIFIED`, `TRIAGED -> DISQUALIFIED`, `TRIAGED -> ARCHIVED`, `QUALIFIED -> CONVERTED`, `QUALIFIED -> DISQUALIFIED`, `QUALIFIED -> ARCHIVED`, `DISQUALIFIED -> TRIAGED`, `DISQUALIFIED -> ARCHIVED`, `CONVERTED -> ARCHIVED`, and `ARCHIVED -> TRIAGED` on authorized retention-window restore. Conversion is only `QUALIFIED -> CONVERTED`. Each transition requires expected version, current state, server authorization, reason where applicable, append-only activity/audit evidence, and atomic state/version update. All unlisted/self transitions are invalid.
+Implemented Phase 8 lead states are `NEW`, `CONTACTED`, `QUALIFIED`, `VIEWING`, `NEGOTIATION`, `WON`, and `LOST`. The only forward path is `NEW -> CONTACTED -> QUALIFIED -> VIEWING -> NEGOTIATION -> WON`; any non-terminal state may transition to `LOST`. `WON` and `LOST` are terminal and reopen is not implemented. Each transition requires expected version, current state, trusted server authorization, append-only `lead_activities`, audit evidence, and an atomic state/version update. All unlisted/self transitions are invalid.
 
 Proposed customer states are `ACTIVE`, `RESTRICTED`, `ARCHIVED`, `ERASED`. Allowed transitions are `ACTIVE -> RESTRICTED`, `ACTIVE -> ARCHIVED`, `RESTRICTED -> ACTIVE`, `RESTRICTED -> ARCHIVED`, `ARCHIVED -> ACTIVE` within retention after uniqueness/privacy checks, and `ACTIVE|RESTRICTED|ARCHIVED -> ERASED` through the irreversible privacy workflow. `ERASED` is terminal. Restriction, archive, restore, merge, export, and erasure require explicit authorization and audit. Restore never silently revives deleted contact points, requests, appointments, assignments, or consent.
 
@@ -36,9 +36,9 @@ Proposed appointment states are `REQUESTED`, `CONFIRMED`, `CANCELLED`, `COMPLETE
 
 Proposed match states are `PROPOSED`, `REVIEWED`, `DISMISSED`, `STALE`. Allowed transitions are `PROPOSED -> REVIEWED|DISMISSED|STALE` and `REVIEWED -> DISMISSED|STALE`. `DISMISSED` and `STALE` are terminal for that immutable computed basis; recomputation under a new rule/input basis creates a separately versioned `PROPOSED` row. All unlisted/self transitions are invalid.
 
-## Explicit idempotent lead conversion
+## Future explicit idempotent lead conversion
 
-Conversion is a named application use case, never an update inferred from matching contact text. It authenticates/authorizes the actor, validates a unique client idempotency key, locks the lead, and checks expected lead version and `QUALIFIED` state. It then either creates a new customer or links a deliberately selected existing customer after duplicate-candidate review; creates/moves approved contact points with their provenance and consent boundaries; inserts one `lead_conversions` success record; moves the lead to `CONVERTED`; appends customer activity and audit evidence; increments versions; and writes required notification/outbox intent in one transaction. A uniqueness constraint on successful conversion by lead plus on the idempotency key resolves races. An identical retry returns the recorded outcome; a different payload using the same key returns conflict. Provider email/analytics occurs after commit and cannot roll back conversion.
+Conversion is a named future ADMIN-only application use case, never an update inferred from matching contact text. It is not implemented in Phase 8 and must be re-designed against the implemented terminal `WON` lifecycle before delivery.
 
 ## Contact normalization and duplicate candidates
 

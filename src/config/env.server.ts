@@ -3,6 +3,7 @@ import { z } from "zod";
 import { parsePublicEnv } from "@/config/env.client";
 
 const serviceRoleSchema = z.string().min(20);
+const leadHmacSecretSchema = z.string().min(32);
 
 const localDatabaseUrlSchema = z
   .string()
@@ -40,6 +41,23 @@ export function parseServerEnv(values: Record<string, string | undefined>) {
     SUPABASE_SERVICE_ROLE_KEY: serviceRoleSchema.parse(
       values.SUPABASE_SERVICE_ROLE_KEY,
     ),
+    LEAD_INTAKE_HMAC_SECRET: leadHmacSecretSchema.parse(
+      values.LEAD_INTAKE_HMAC_SECRET,
+    ),
+    LEAD_RATE_LIMIT_MAX_ATTEMPTS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(100)
+      .default(5)
+      .parse(values.LEAD_RATE_LIMIT_MAX_ATTEMPTS),
+    LEAD_RATE_LIMIT_WINDOW_SECONDS: z.coerce
+      .number()
+      .int()
+      .positive()
+      .max(86_400)
+      .default(900)
+      .parse(values.LEAD_RATE_LIMIT_WINDOW_SECONDS),
     LOCAL_DATABASE_URL: localDatabaseUrlSchema.parse(values.LOCAL_DATABASE_URL),
     R2:
       configuredR2Values.length === 4

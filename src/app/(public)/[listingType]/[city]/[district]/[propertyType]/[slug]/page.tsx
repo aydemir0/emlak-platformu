@@ -4,6 +4,7 @@ import { notFound, permanentRedirect } from "next/navigation";
 import type { PublicPropertyDetail } from "@/application/public-properties/public-property-contracts";
 import { PublicPropertyBreadcrumbs } from "@/features/public-properties/components/public-property-breadcrumbs";
 import { PublicPropertyGallery } from "@/features/public-properties/components/public-property-gallery";
+import { PublicLeadContactForm } from "@/features/leads/components/public-lead-contact-form";
 import {
   buildPublicPropertyBreadcrumbJsonLd,
   buildPublicPropertyMetadata,
@@ -87,15 +88,9 @@ export function PublicPropertyDetailView({
         <aside className="border-border h-fit space-y-3 rounded-xl border p-5">
           <h2 className="font-semibold">Bu ilanla ilgileniyor musunuz?</h2>
           <p className="text-muted-foreground text-sm">
-            Danışman iletişim akışı yakında kullanıma açılacak.
+            İletişim bilgilerinizi paylaşın; ekibimiz size dönüş yapsın.
           </p>
-          <button
-            className="bg-muted text-muted-foreground w-full rounded-lg px-4 py-2"
-            disabled
-            type="button"
-          >
-            Danışmana ulaş
-          </button>
+          <PublicLeadContactForm propertyId={property.publicId} />
         </aside>
       </div>
 

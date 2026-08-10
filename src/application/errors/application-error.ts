@@ -20,6 +20,11 @@ export type ApplicationErrorCode =
   | "MEDIA_UPLOAD_EXPIRED"
   | "MEDIA_PROCESSING_FAILED"
   | "MEDIA_STORAGE_UNAVAILABLE"
+  | "LEAD_NOT_FOUND"
+  | "LEAD_FORBIDDEN"
+  | "LEAD_INVALID_TRANSITION"
+  | "LEAD_CONFLICT"
+  | "LEAD_VALIDATION_FAILED"
   | "INTERNAL";
 
 type ApplicationErrorOptions = ErrorOptions & { correlationId?: string };

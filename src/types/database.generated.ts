@@ -832,6 +832,169 @@ export type Database = {
         }
         Relationships: []
       }
+      lead_activities: {
+        Row: {
+          activity_type: string
+          correlation_id: string
+          created_at: string
+          created_by_user_identity_id: string | null
+          details: Json
+          id: string
+          lead_id: string
+          occurred_at: string
+          source_idempotency_key: string | null
+          summary: string | null
+        }
+        Insert: {
+          activity_type: string
+          correlation_id: string
+          created_at?: string
+          created_by_user_identity_id?: string | null
+          details?: Json
+          id?: string
+          lead_id: string
+          occurred_at: string
+          source_idempotency_key?: string | null
+          summary?: string | null
+        }
+        Update: {
+          activity_type?: string
+          correlation_id?: string
+          created_at?: string
+          created_by_user_identity_id?: string | null
+          details?: Json
+          id?: string
+          lead_id?: string
+          occurred_at?: string
+          source_idempotency_key?: string | null
+          summary?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_activities_created_by_user_identity_id_fkey"
+            columns: ["created_by_user_identity_id"]
+            isOneToOne: false
+            referencedRelation: "user_identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_activities_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_assignment_history: {
+        Row: {
+          assigned_by_user_identity_id: string | null
+          correlation_id: string
+          from_advisor_id: string | null
+          id: string
+          lead_id: string
+          occurred_at: string
+          reason_code: string | null
+          source_idempotency_key: string | null
+          to_advisor_id: string | null
+        }
+        Insert: {
+          assigned_by_user_identity_id?: string | null
+          correlation_id: string
+          from_advisor_id?: string | null
+          id?: string
+          lead_id: string
+          occurred_at?: string
+          reason_code?: string | null
+          source_idempotency_key?: string | null
+          to_advisor_id?: string | null
+        }
+        Update: {
+          assigned_by_user_identity_id?: string | null
+          correlation_id?: string
+          from_advisor_id?: string | null
+          id?: string
+          lead_id?: string
+          occurred_at?: string
+          reason_code?: string | null
+          source_idempotency_key?: string | null
+          to_advisor_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_assignment_history_assigned_by_user_identity_id_fkey"
+            columns: ["assigned_by_user_identity_id"]
+            isOneToOne: false
+            referencedRelation: "user_identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_assignment_history_from_advisor_id_fkey"
+            columns: ["from_advisor_id"]
+            isOneToOne: false
+            referencedRelation: "advisors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_assignment_history_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_assignment_history_to_advisor_id_fkey"
+            columns: ["to_advisor_id"]
+            isOneToOne: false
+            referencedRelation: "advisors"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      lead_contact_intakes: {
+        Row: {
+          channel: string
+          created_at: string
+          id: string
+          lead_id: string
+          normalization_algorithm: string
+          normalization_version: string
+          normalized_value: string | null
+          raw_value: string
+          source: string
+        }
+        Insert: {
+          channel: string
+          created_at?: string
+          id?: string
+          lead_id: string
+          normalization_algorithm: string
+          normalization_version: string
+          normalized_value?: string | null
+          raw_value: string
+          source: string
+        }
+        Update: {
+          channel?: string
+          created_at?: string
+          id?: string
+          lead_id?: string
+          normalization_algorithm?: string
+          normalization_version?: string
+          normalized_value?: string | null
+          raw_value?: string
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lead_contact_intakes_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lead_conversions: {
         Row: {
           converted_at: string
@@ -895,6 +1058,7 @@ export type Database = {
       }
       leads: {
         Row: {
+          abuse_network_signal: string | null
           assigned_advisor_id: string | null
           consent_kind: string | null
           consented_at: string | null
@@ -902,6 +1066,7 @@ export type Database = {
           deleted_at: string | null
           email: string | null
           id: string
+          idempotency_fingerprint: string | null
           idempotency_key: string | null
           message: string | null
           name: string | null
@@ -914,6 +1079,7 @@ export type Database = {
           version: number
         }
         Insert: {
+          abuse_network_signal?: string | null
           assigned_advisor_id?: string | null
           consent_kind?: string | null
           consented_at?: string | null
@@ -921,6 +1087,7 @@ export type Database = {
           deleted_at?: string | null
           email?: string | null
           id?: string
+          idempotency_fingerprint?: string | null
           idempotency_key?: string | null
           message?: string | null
           name?: string | null
@@ -933,6 +1100,7 @@ export type Database = {
           version?: number
         }
         Update: {
+          abuse_network_signal?: string | null
           assigned_advisor_id?: string | null
           consent_kind?: string | null
           consented_at?: string | null
@@ -940,6 +1108,7 @@ export type Database = {
           deleted_at?: string | null
           email?: string | null
           id?: string
+          idempotency_fingerprint?: string | null
           idempotency_key?: string | null
           message?: string | null
           name?: string | null
@@ -2819,3 +2988,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+

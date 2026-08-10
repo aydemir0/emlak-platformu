@@ -16,6 +16,7 @@ jobs:
       NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:55321
       NEXT_PUBLIC_SUPABASE_ANON_KEY: public-anon-key-for-ci-validation
       SUPABASE_SERVICE_ROLE_KEY: server-only-key-for-ci-validation
+      LEAD_INTAKE_HMAC_SECRET: ci-only-lead-intake-hmac-secret-2026-08-10
       LOCAL_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55322/postgres
     steps:
       - uses: actions/checkout@v4

@@ -5,16 +5,16 @@ select extensions.plan(14);
 
 select extensions.is(
   (select count(*)::bigint from pg_catalog.pg_tables where schemaname='public'),
-  45::bigint, 'canonical public schema has exactly 45 tables'
+  48::bigint, 'canonical public schema has exactly 48 tables after Phase 8 lead intake and history tables'
 );
 select extensions.is(
   (select count(*)::bigint from pg_catalog.pg_tables where schemaname='public' and rowsecurity),
-  45::bigint, 'RLS is enabled on all 45 tables'
+  48::bigint, 'RLS is enabled on all 48 canonical tables'
 );
 select extensions.is(
   (select count(*)::bigint from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
    where n.nspname='public' and c.relkind='r' and c.relforcerowsecurity),
-  45::bigint, 'RLS is forced on all 45 tables'
+  48::bigint, 'RLS is forced on all 48 canonical tables'
 );
 select extensions.is(
   (select count(*)::bigint from pg_catalog.pg_policies where schemaname='public' and 'anon'=any(roles)),

@@ -1,10 +1,14 @@
 # Transactional outbox design
 
-**Status:** Proposed
+**Status:** Phase 2 baseline, with Phase 8 lead worker implementation
 
 ## Purpose
 
 Turn selected committed database changes into recoverable post-commit work without calling external providers inside business transactions and without introducing a broker, managed queue, event bus, or microservice. This document makes the crash-recovery boundary in [ADR-007](../decisions/ADR-007-event-outbox-strategy.md) concrete at schema-design level while remaining non-executable.
+
+## Phase 8 implementation status
+
+The lead boundary now emits `lead.notification_requested` and `lead.analytics_requested` with PII-minimized payloads. `PostgresLeadOutboxWorkerRepository` implements atomic claim/lease, expiry reclaim, retryable return to `PENDING`, non-retryable `DEAD_LETTER`, and lease-owner-guarded completion. `processLeadOutboxBatch` calls provider-independent consumers only after claim commits and passes the durable idempotency key. Provider adapters remain unimplemented. A future worker identity/attempt-fencing decision must ensure a restarted worker cannot reuse a stale lease identity.
 
 ## Boundary and ownership
 
@@ -22,27 +26,27 @@ The outbox is:
 
 `outbox_messages` stores one bounded, versioned work request:
 
-| Field | Type intent | Required | Rule |
-| --- | --- | --- | --- |
-| `id` | UUID | Yes | Immutable message and delivery idempotency identity |
-| `event_name` | text | Yes | Allowlisted stable name such as `property.publication_revoked` |
-| `event_version` | positive small integer | Yes | Payload contract version; consumer rejects unsupported versions safely |
-| `owning_domain` | text | Yes | Allowlisted producer boundary, not an arbitrary topic |
-| `aggregate_type` | text | Yes | Allowlisted target type |
-| `aggregate_id` | UUID | Yes | Stable target reference; consumer re-reads current state when required |
-| `correlation_id` | UUID | Yes | Connects request, audit, outbox, provider attempt, and diagnostics |
-| `idempotency_key` | text | Yes | Unique within the effect contract; deterministic and free of PII |
-| `payload` | bounded JSONB | Yes | Minimum allowlisted facts/references validated by event name/version |
-| `status` | checked text | Yes | `PENDING`, `PROCESSING`, `PROCESSED`, or `DEAD_LETTER` |
-| `attempt_count` | non-negative integer | Yes | Incremented once per claimed delivery attempt |
-| `next_attempt_at` | timestamptz | Yes | Eligibility boundary for pending/retry work |
-| `lease_owner` | text | No | Opaque dispatcher instance identity; never a user or secret |
-| `lease_expires_at` | timestamptz | No | Required only while processing; enables crash reclamation |
-| `last_attempt_at` | timestamptz | No | Operational evidence |
-| `last_error_code` | text | No | Bounded safe category, not raw provider response |
-| `processed_at` | timestamptz | No | Required only when processed |
-| `dead_lettered_at` | timestamptz | No | Required only when dead-lettered |
-| `created_at` | timestamptz | Yes | Transactional enqueue instant |
+| Field              | Type intent            | Required | Rule                                                                   |
+| ------------------ | ---------------------- | -------- | ---------------------------------------------------------------------- |
+| `id`               | UUID                   | Yes      | Immutable message and delivery idempotency identity                    |
+| `event_name`       | text                   | Yes      | Allowlisted stable name such as `property.publication_revoked`         |
+| `event_version`    | positive small integer | Yes      | Payload contract version; consumer rejects unsupported versions safely |
+| `owning_domain`    | text                   | Yes      | Allowlisted producer boundary, not an arbitrary topic                  |
+| `aggregate_type`   | text                   | Yes      | Allowlisted target type                                                |
+| `aggregate_id`     | UUID                   | Yes      | Stable target reference; consumer re-reads current state when required |
+| `correlation_id`   | UUID                   | Yes      | Connects request, audit, outbox, provider attempt, and diagnostics     |
+| `idempotency_key`  | text                   | Yes      | Unique within the effect contract; deterministic and free of PII       |
+| `payload`          | bounded JSONB          | Yes      | Minimum allowlisted facts/references validated by event name/version   |
+| `status`           | checked text           | Yes      | `PENDING`, `PROCESSING`, `PROCESSED`, or `DEAD_LETTER`                 |
+| `attempt_count`    | non-negative integer   | Yes      | Incremented once per claimed delivery attempt                          |
+| `next_attempt_at`  | timestamptz            | Yes      | Eligibility boundary for pending/retry work                            |
+| `lease_owner`      | text                   | No       | Opaque dispatcher instance identity; never a user or secret            |
+| `lease_expires_at` | timestamptz            | No       | Required only while processing; enables crash reclamation              |
+| `last_attempt_at`  | timestamptz            | No       | Operational evidence                                                   |
+| `last_error_code`  | text                   | No       | Bounded safe category, not raw provider response                       |
+| `processed_at`     | timestamptz            | No       | Required only when processed                                           |
+| `dead_lettered_at` | timestamptz            | No       | Required only when dead-lettered                                       |
+| `created_at`       | timestamptz            | Yes      | Transactional enqueue instant                                          |
 
 Known business data belongs in relational columns. `payload` is justified only as a versioned message envelope; size, keys, nesting, and data classification are validated per `event_name` and `event_version`. It never contains secrets, tokens, signed URLs, raw media, free-form request bodies, or unnecessary lead/customer PII.
 
@@ -61,15 +65,15 @@ DEAD_LETTER --audited replay after remediation--> PENDING
 
 Allowed transitions:
 
-| From | To | Preconditions | Atomic effects |
-| --- | --- | --- | --- |
-| New | `PENDING` | Inserted with authoritative transaction | `attempt_count = 0`, immediate or future `next_attempt_at` |
-| `PENDING` | `PROCESSING` | Eligible time reached and no live lease | Assign owner/expiry, increment attempt, set last attempt |
-| Expired `PROCESSING` | `PROCESSING` | Previous lease expired | New owner/expiry, increment attempt; duplicate delivery remains safe |
-| `PROCESSING` | `PROCESSED` | Caller owns current lease and adapter outcome is successful/reconciled | Clear lease, set `processed_at`, clear safe transient error |
-| `PROCESSING` | `PENDING` | Caller owns lease; failure is retryable and attempts remain | Clear lease, calculate bounded future `next_attempt_at`, store category |
-| `PROCESSING` | `DEAD_LETTER` | Permanent failure or retry budget exhausted | Clear lease, set escalation time/category |
-| `DEAD_LETTER` | `PENDING` | Privileged reviewed replay with remediation note | Clear terminal fields as defined, retain attempt/audit history |
+| From                 | To            | Preconditions                                                          | Atomic effects                                                          |
+| -------------------- | ------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| New                  | `PENDING`     | Inserted with authoritative transaction                                | `attempt_count = 0`, immediate or future `next_attempt_at`              |
+| `PENDING`            | `PROCESSING`  | Eligible time reached and no live lease                                | Assign owner/expiry, increment attempt, set last attempt                |
+| Expired `PROCESSING` | `PROCESSING`  | Previous lease expired                                                 | New owner/expiry, increment attempt; duplicate delivery remains safe    |
+| `PROCESSING`         | `PROCESSED`   | Caller owns current lease and adapter outcome is successful/reconciled | Clear lease, set `processed_at`, clear safe transient error             |
+| `PROCESSING`         | `PENDING`     | Caller owns lease; failure is retryable and attempts remain            | Clear lease, calculate bounded future `next_attempt_at`, store category |
+| `PROCESSING`         | `DEAD_LETTER` | Permanent failure or retry budget exhausted                            | Clear lease, set escalation time/category                               |
+| `DEAD_LETTER`        | `PENDING`     | Privileged reviewed replay with remediation note                       | Clear terminal fields as defined, retain attempt/audit history          |
 
 All unlisted transitions are invalid. `PROCESSED` is terminal. A processed message is never changed back to pending merely to resend; a deliberate new effect receives a new message identity and audit trail.
 
@@ -151,16 +155,16 @@ Measure enqueue rate, claim rate, processed rate, retry categories, dead-letter 
 
 ## Failure-mode review
 
-| Failure | Safe behavior |
-| --- | --- |
-| Process crashes before business commit | Neither business change nor message exists |
-| Process crashes after commit before dispatch | Pending row remains claimable |
-| Dispatcher crashes after claim | Lease expires and work is reclaimed |
-| Provider succeeds but completion write fails | Reclaim/retry reconciles idempotently; duplicate effect is controlled |
+| Failure                                        | Safe behavior                                                               |
+| ---------------------------------------------- | --------------------------------------------------------------------------- |
+| Process crashes before business commit         | Neither business change nor message exists                                  |
+| Process crashes after commit before dispatch   | Pending row remains claimable                                               |
+| Dispatcher crashes after claim                 | Lease expires and work is reclaimed                                         |
+| Provider succeeds but completion write fails   | Reclaim/retry reconciles idempotently; duplicate effect is controlled       |
 | Completion write succeeds but response is lost | Message remains processed; caller must not create a second row for same key |
-| Stale worker completes after lease transfer | Conditional completion rejects stale owner/attempt |
-| Poison message | Bounded attempts lead to visible dead-letter escalation |
-| Old event conflicts with current state | Consumer re-reads/revalidates and records obsolete/no-op outcome safely |
+| Stale worker completes after lease transfer    | Conditional completion rejects stale owner/attempt                          |
+| Poison message                                 | Bounded attempts lead to visible dead-letter escalation                     |
+| Old event conflicts with current state         | Consumer re-reads/revalidates and records obsolete/no-op outcome safely     |
 
 ## Rejected alternatives
 

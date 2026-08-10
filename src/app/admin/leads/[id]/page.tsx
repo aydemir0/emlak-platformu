@@ -1,0 +1,129 @@
+import { notFound } from "next/navigation";
+import { randomUUID } from "node:crypto";
+import { requireStaffPrincipal } from "@/infrastructure/auth/require-staff-principal.server";
+import { PostgresLeadCrmReadRepository } from "@/infrastructure/leads/postgres-lead-crm.server";
+import {
+  leadAssignmentAction,
+  leadNoteAction,
+  leadStatusAction,
+} from "@/features/leads/lead-actions.server";
+export const dynamic = "force-dynamic";
+const states = [
+  "NEW",
+  "CONTACTED",
+  "QUALIFIED",
+  "VIEWING",
+  "NEGOTIATION",
+  "WON",
+  "LOST",
+];
+type Advisor = { id: string; display_name: string };
+type Activity = {
+  activity_type: string;
+  summary: string | null;
+  occurred_at: Date;
+};
+export default async function LeadDetail({
+  params,
+}: {
+  params: Promise<{ id: string }>;
+}) {
+  const { id } = await params;
+  const actor = await requireStaffPrincipal();
+  const repo = new PostgresLeadCrmReadRepository();
+  const [lead, advisors] = await Promise.all([
+    repo.get(actor, id),
+    actor.role === "ADMIN" ? repo.advisors() : Promise.resolve([]),
+  ]);
+  if (!lead) notFound();
+  const hidden = (
+    <>
+      <input type="hidden" name="leadId" value={lead.id} />
+      <input
+        type="hidden"
+        name="expectedVersion"
+        value={lead.version.toString()}
+      />
+      <input type="hidden" name="idempotencyKey" value={randomUUID()} />
+    </>
+  );
+  return (
+    <section className="space-y-6">
+      <header>
+        <p className="text-muted-foreground text-sm">
+          {lead.property_title ?? "Erişilemeyen ilan"}
+        </p>
+        <h1 className="text-2xl font-semibold">
+          {lead.name ?? lead.email ?? lead.phone ?? "Lead"}
+        </h1>
+        <p>
+          {lead.status} · {lead.advisor_name ?? "Atanmamış"}
+        </p>
+      </header>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <form
+          action={leadStatusAction}
+          className="space-y-2 rounded border p-4"
+        >
+          {hidden}
+          <h2 className="font-medium">Durum</h2>
+          <select name="status" defaultValue={lead.status}>
+            {states.map((s) => (
+              <option key={s}>{s}</option>
+            ))}
+          </select>
+          <button className="ml-2 rounded border px-3 py-1">Güncelle</button>
+        </form>
+        <form action={leadNoteAction} className="space-y-2 rounded border p-4">
+          {hidden}
+          <h2 className="font-medium">Not ekle</h2>
+          <textarea
+            name="summary"
+            required
+            maxLength={4000}
+            className="block w-full rounded border p-2"
+          />
+          <button className="rounded border px-3 py-1">Kaydet</button>
+        </form>
+        {actor.role === "ADMIN" ? (
+          <form
+            action={leadAssignmentAction}
+            className="space-y-2 rounded border p-4"
+          >
+            {hidden}
+            <h2 className="font-medium">Danışman atama</h2>
+            <select
+              name="advisorId"
+              defaultValue={lead.assigned_advisor_id ?? ""}
+            >
+              <option value="">Atanmamış</option>
+              {advisors.map((a: Advisor) => (
+                <option key={a.id} value={a.id}>
+                  {a.display_name}
+                </option>
+              ))}
+            </select>
+            <button className="ml-2 rounded border px-3 py-1">Uygula</button>
+          </form>
+        ) : null}
+      </div>
+      <section>
+        <h2 className="font-semibold">Son hareketler</h2>
+        <ol className="mt-3 space-y-2">
+          {lead.activities.map((a: Activity) => (
+            <li
+              key={`${a.occurred_at}-${a.activity_type}`}
+              className="rounded border p-3"
+            >
+              <b>{a.activity_type}</b>
+              {a.summary ? <p>{a.summary}</p> : null}
+              <time className="text-muted-foreground text-xs">
+                {new Date(a.occurred_at).toLocaleString("tr-TR")}
+              </time>
+            </li>
+          ))}
+        </ol>
+      </section>
+    </section>
+  );
+}
