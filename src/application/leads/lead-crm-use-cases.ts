@@ -66,6 +66,7 @@ async function audit(
   changeSummary: Record<string, unknown>,
 ) {
   await tx.insertAudit({
+    actorUserIdentityId: context.actor.identityId,
     action,
     targetId: leadId,
     correlationId: context.correlationId,

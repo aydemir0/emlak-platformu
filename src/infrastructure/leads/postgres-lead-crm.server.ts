@@ -98,7 +98,7 @@ class Tx implements LeadCrmTransaction {
     await this.c.query(
       "insert into public.audit_logs(actor_user_identity_id,action,target_type,target_id,outcome,correlation_id,request_id,change_summary) values($1,$2,'lead',$3,'succeeded',$4,$5,$6)",
       [
-        null,
+        v.actorUserIdentityId ?? null,
         v.action,
         v.targetId,
         v.correlationId,

@@ -22,6 +22,10 @@ const ctx = {
 describe("Postgres lead CRM commands", () => {
   beforeAll(async () => {
     await pool.query(
+      "insert into public.user_identities(id,auth_provider,provider_subject,status) values($1,'integration',$2,'active')",
+      [ctx.actor.identityId, `crm-${ctx.actor.identityId}`],
+    );
+    await pool.query(
       "insert into public.leads(id,submission_id,status,source,email,consent_kind,consented_at,idempotency_key) values($1,$2,'NEW','test','crm@example.test','CONTACT',now(),$3)",
       [leadId, randomUUID(), randomUUID()],
     );
@@ -35,6 +39,9 @@ describe("Postgres lead CRM commands", () => {
       leadId,
     ]);
     await pool.query("delete from public.leads where id=$1", [leadId]);
+    await pool.query("delete from public.user_identities where id=$1", [
+      ctx.actor.identityId,
+    ]);
     await pool.query("set session_replication_role = origin");
     await pool.end();
   });
