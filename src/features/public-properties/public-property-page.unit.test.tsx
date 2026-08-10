@@ -9,6 +9,7 @@ import { PublicPropertyListingView } from "@/app/(public)/[listingType]/page";
 import { PublicPropertyDetailView } from "@/app/(public)/[listingType]/[city]/[district]/[propertyType]/[slug]/page";
 import {
   buildPublicPropertyBreadcrumbJsonLd,
+  buildPublicPropertyListingMetadata,
   buildPublicPropertyMetadata,
 } from "@/features/public-properties/public-property-page.server";
 import { publicPropertyDetailFixture } from "@/features/public-properties/public-property-components.unit.test";
@@ -84,6 +85,22 @@ describe("public property detail page", () => {
     expect(metadata.alternates?.canonical).toBe(
       "/satilik/ankara/cankaya/daire/bahceli-aile-dairesi",
     );
+  });
+
+  it("marks filtered listings as noindex while preserving link discovery", () => {
+    const metadata = buildPublicPropertyListingMetadata({
+      listingType: "SATILIK",
+      page: {
+        items: [],
+        query: { city: "ankara", page: 1 },
+        page: 1,
+        total: 0,
+        canonicalPath: "/satilik?city=ankara",
+        indexability: "NOINDEX",
+      },
+    });
+
+    expect(metadata.robots).toEqual({ index: false, follow: true });
   });
 });
 

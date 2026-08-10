@@ -106,6 +106,10 @@ export function buildPublicPropertyListingMetadata(
     title: `${listingLabel} ilanlar`,
     description,
     alternates: { canonical: data.page.canonicalPath },
+    robots:
+      data.page.indexability === "NOINDEX"
+        ? { index: false, follow: true }
+        : undefined,
     openGraph: {
       type: "website",
       locale: "tr_TR",

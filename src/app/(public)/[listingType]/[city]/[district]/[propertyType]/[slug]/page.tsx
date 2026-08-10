@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { notFound, permanentRedirect } from "next/navigation";
 
 import type { PublicPropertyDetail } from "@/application/public-properties/public-property-contracts";
 import { PublicPropertyBreadcrumbs } from "@/features/public-properties/components/public-property-breadcrumbs";
@@ -121,7 +122,12 @@ export default async function PublicPropertyDetailPage({
   params,
 }: DetailPageProps) {
   const resolution = await loadPublicPropertyDetailPage(await params);
-  return resolution.kind === "PROPERTY" ? (
-    <PublicPropertyDetailView property={resolution.property} />
-  ) : null;
+  switch (resolution.kind) {
+    case "PROPERTY":
+      return <PublicPropertyDetailView property={resolution.property} />;
+    case "REDIRECT":
+      permanentRedirect(resolution.location);
+    case "NOT_FOUND":
+      notFound();
+  }
 }
