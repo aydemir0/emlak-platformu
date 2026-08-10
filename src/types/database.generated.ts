@@ -177,59 +177,128 @@ export type Database = {
           },
         ]
       }
+      appointment_events: {
+        Row: {
+          actor_user_identity_id: string | null
+          appointment_id: string
+          correlation_id: string
+          created_at: string
+          event_data: Json
+          event_type: string
+          id: string
+          occurred_at: string
+          source_idempotency_key: string | null
+        }
+        Insert: {
+          actor_user_identity_id?: string | null
+          appointment_id: string
+          correlation_id: string
+          created_at?: string
+          event_data?: Json
+          event_type: string
+          id?: string
+          occurred_at?: string
+          source_idempotency_key?: string | null
+        }
+        Update: {
+          actor_user_identity_id?: string | null
+          appointment_id?: string
+          correlation_id?: string
+          created_at?: string
+          event_data?: Json
+          event_type?: string
+          id?: string
+          occurred_at?: string
+          source_idempotency_key?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "appointment_events_actor_user_identity_id_fkey"
+            columns: ["actor_user_identity_id"]
+            isOneToOne: false
+            referencedRelation: "user_identities"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointment_events_appointment_id_fkey"
+            columns: ["appointment_id"]
+            isOneToOne: false
+            referencedRelation: "appointments"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       appointments: {
         Row: {
           advisor_id: string | null
-          appointment_type: string
+          appointment_type: string | null
           created_at: string
-          customer_id: string
+          created_by_user_identity_id: string | null
+          customer_id: string | null
           customer_request_id: string | null
           deleted_at: string | null
           ends_at: string
           id: string
           idempotency_key: string | null
+          lead_id: string | null
           location_note: string | null
           notes: string | null
           property_id: string | null
+          resolution_note: string | null
+          resolution_reason_code: string | null
+          scheduled_timezone: string | null
           starts_at: string
           status: string
           updated_at: string
+          updated_by_user_identity_id: string | null
           version: number
         }
         Insert: {
           advisor_id?: string | null
-          appointment_type: string
+          appointment_type?: string | null
           created_at?: string
-          customer_id: string
+          created_by_user_identity_id?: string | null
+          customer_id?: string | null
           customer_request_id?: string | null
           deleted_at?: string | null
           ends_at: string
           id?: string
           idempotency_key?: string | null
+          lead_id?: string | null
           location_note?: string | null
           notes?: string | null
           property_id?: string | null
+          resolution_note?: string | null
+          resolution_reason_code?: string | null
+          scheduled_timezone?: string | null
           starts_at: string
           status: string
           updated_at?: string
+          updated_by_user_identity_id?: string | null
           version?: number
         }
         Update: {
           advisor_id?: string | null
-          appointment_type?: string
+          appointment_type?: string | null
           created_at?: string
-          customer_id?: string
+          created_by_user_identity_id?: string | null
+          customer_id?: string | null
           customer_request_id?: string | null
           deleted_at?: string | null
           ends_at?: string
           id?: string
           idempotency_key?: string | null
+          lead_id?: string | null
           location_note?: string | null
           notes?: string | null
           property_id?: string | null
+          resolution_note?: string | null
+          resolution_reason_code?: string | null
+          scheduled_timezone?: string | null
           starts_at?: string
           status?: string
           updated_at?: string
+          updated_by_user_identity_id?: string | null
           version?: number
         }
         Relationships: [
@@ -238,6 +307,13 @@ export type Database = {
             columns: ["advisor_id"]
             isOneToOne: false
             referencedRelation: "advisors"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_created_by_user_identity_id_fkey"
+            columns: ["created_by_user_identity_id"]
+            isOneToOne: false
+            referencedRelation: "user_identities"
             referencedColumns: ["id"]
           },
           {
@@ -255,10 +331,24 @@ export type Database = {
             referencedColumns: ["id", "customer_id"]
           },
           {
+            foreignKeyName: "appointments_lead_id_fkey"
+            columns: ["lead_id"]
+            isOneToOne: false
+            referencedRelation: "leads"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "appointments_property_id_fkey"
             columns: ["property_id"]
             isOneToOne: false
             referencedRelation: "properties"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "appointments_updated_by_user_identity_id_fkey"
+            columns: ["updated_by_user_identity_id"]
+            isOneToOne: false
+            referencedRelation: "user_identities"
             referencedColumns: ["id"]
           },
         ]
