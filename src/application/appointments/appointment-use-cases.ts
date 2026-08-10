@@ -153,17 +153,28 @@ export async function createAppointment(
         "APPOINTMENT_FORBIDDEN",
         "APPOINTMENT_FORBIDDEN",
       );
-    const a = await tx.create({
-      leadId: input.leadId,
-      advisorId,
-      propertyId: input.propertyId ?? null,
-      startsAt: input.startsAt,
-      endsAt: input.endsAt,
-      scheduledTimezone: input.scheduledTimezone,
-      status: "REQUESTED",
-      createdByUserIdentityId: c.actor.identityId,
-      updatedByUserIdentityId: c.actor.identityId,
-    });
+    let a: AppointmentRecord;
+    try {
+      a = await tx.create({
+        leadId: input.leadId,
+        advisorId,
+        propertyId: input.propertyId ?? null,
+        startsAt: input.startsAt,
+        endsAt: input.endsAt,
+        scheduledTimezone: input.scheduledTimezone,
+        status: "REQUESTED",
+        createdByUserIdentityId: c.actor.identityId,
+        updatedByUserIdentityId: c.actor.identityId,
+      });
+    } catch (error) {
+      if ((error as { code?: string }).code === "23P01") {
+        throw new ApplicationError(
+          "APPOINTMENT_TIME_CONFLICT",
+          "APPOINTMENT_TIME_CONFLICT",
+        );
+      }
+      throw error;
+    }
     await eventAudit(tx, c, a, "CREATED", { status: "REQUESTED", advisorId });
     return a;
   });
