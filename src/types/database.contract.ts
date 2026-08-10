@@ -16,6 +16,9 @@ type ExpectedTableNames =
   | "customers"
   | "heating_types"
   | "lead_conversions"
+  | "lead_assignment_history"
+  | "lead_activities"
+  | "lead_contact_intakes"
   | "leads"
   | "listing_types"
   | "location_slug_history"
@@ -53,6 +56,6 @@ type Equal<A, B> =
     : false;
 type Assert<T extends true> = T;
 
-export type DatabaseTablesMatchPhaseSix = Assert<
+export type DatabaseTablesMatchPhaseEight = Assert<
   Equal<keyof Database["public"]["Tables"], ExpectedTableNames>
 >;
