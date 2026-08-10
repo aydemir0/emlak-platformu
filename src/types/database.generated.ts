@@ -894,9 +894,9 @@ export type Database = {
         ]
       }
       lead_activities: {
-        Row: { activity_type: string; correlation_id: string; created_at: string; created_by_user_identity_id: string | null; id: string; lead_id: string; occurred_at: string; source_idempotency_key: string | null; summary: string | null }
-        Insert: { activity_type: string; correlation_id: string; created_at?: string; created_by_user_identity_id?: string | null; id?: string; lead_id: string; occurred_at: string; source_idempotency_key?: string | null; summary?: string | null }
-        Update: { activity_type?: string; correlation_id?: string; created_at?: string; created_by_user_identity_id?: string | null; id?: string; lead_id?: string; occurred_at?: string; source_idempotency_key?: string | null; summary?: string | null }
+        Row: { activity_type: string; correlation_id: string; created_at: string; created_by_user_identity_id: string | null; details: Json; id: string; lead_id: string; occurred_at: string; source_idempotency_key: string | null; summary: string | null }
+        Insert: { activity_type: string; correlation_id: string; created_at?: string; created_by_user_identity_id?: string | null; details?: Json; id?: string; lead_id: string; occurred_at: string; source_idempotency_key?: string | null; summary?: string | null }
+        Update: { activity_type?: string; correlation_id?: string; created_at?: string; created_by_user_identity_id?: string | null; details?: Json; id?: string; lead_id?: string; occurred_at?: string; source_idempotency_key?: string | null; summary?: string | null }
         Relationships: [
           { foreignKeyName: "lead_activities_created_by_user_identity_id_fkey"; columns: ["created_by_user_identity_id"]; isOneToOne: false; referencedRelation: "user_identities"; referencedColumns: ["id"] },
           { foreignKeyName: "lead_activities_lead_id_fkey"; columns: ["lead_id"]; isOneToOne: false; referencedRelation: "leads"; referencedColumns: ["id"] },
