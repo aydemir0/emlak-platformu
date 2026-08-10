@@ -12,6 +12,7 @@ import {
   PostgresAppointmentReadRepository,
   PostgresAppointmentUnitOfWork,
 } from "@/infrastructure/appointments/postgres-appointments.server";
+import { PostgresLeadCrmReadRepository } from "@/infrastructure/leads/postgres-lead-crm.server";
 
 const pool = new Pool({
   connectionString: "postgresql://postgres:postgres@127.0.0.1:55322/postgres",
@@ -334,5 +335,23 @@ describe("Postgres appointment CRM transactions", () => {
       id,
     );
     expect(detail).toMatchObject({ id, lead_id: null, lead_name: null });
+  });
+
+  it("projects bounded lead activities and appointment events without copying event details", async () => {
+    const { appointment } = await create(leadOne, advisorOne, 10);
+    await pool.query(
+      "insert into public.lead_activities(lead_id,activity_type,summary,occurred_at,correlation_id) values($1,'NOTE_ADDED','Safe lead note',now(),$2)",
+      [leadOne, randomUUID()],
+    );
+    const lead = await new PostgresLeadCrmReadRepository(pool).get(
+      admin().actor,
+      leadOne,
+    );
+    const appointments = (lead?.appointments ?? []) as Array<{ id: string }>;
+    const timeline = (lead?.timeline ?? []) as Array<{ source: string }>;
+    expect(appointments.some((item) => item.id === appointment.id)).toBe(true);
+    expect(timeline.map((item) => item.source)).toContain("lead");
+    expect(timeline.map((item) => item.source)).toContain("appointment");
+    expect(JSON.stringify(lead?.timeline)).not.toContain("event_data");
   });
 });

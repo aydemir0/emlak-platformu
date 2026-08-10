@@ -1,5 +1,6 @@
 import { notFound } from "next/navigation";
 import { randomUUID } from "node:crypto";
+import Link from "next/link";
 import { requireStaffPrincipal } from "@/infrastructure/auth/require-staff-principal.server";
 import { PostgresLeadCrmReadRepository } from "@/infrastructure/leads/postgres-lead-crm.server";
 import {
@@ -18,10 +19,12 @@ const states = [
   "LOST",
 ];
 type Advisor = { id: string; display_name: string };
-type Activity = {
-  activity_type: string;
+type TimelineEntry = {
+  source: "lead" | "appointment";
+  eventType: string;
   summary: string | null;
-  occurred_at: Date;
+  occurredAt: Date;
+  appointmentId: string | null;
 };
 export default async function LeadDetail({
   params,
@@ -107,18 +110,122 @@ export default async function LeadDetail({
           </form>
         ) : null}
       </div>
+      <section className="space-y-3">
+        <h2 className="font-semibold">Yaklaşan randevular</h2>
+        {lead.appointments.filter(
+          (appointment: { starts_at: Date }) =>
+            new Date(appointment.starts_at) >= new Date(),
+        ).length === 0 ? (
+          <p className="text-muted-foreground text-sm">Yaklaşan randevu yok.</p>
+        ) : (
+          <ol className="space-y-2">
+            {lead.appointments
+              .filter(
+                (appointment: { starts_at: Date }) =>
+                  new Date(appointment.starts_at) >= new Date(),
+              )
+              .map(
+                (appointment: {
+                  id: string;
+                  status: string;
+                  starts_at: Date;
+                  ends_at: Date;
+                  scheduled_timezone: string | null;
+                  advisor_name: string | null;
+                  property_title: string | null;
+                }) => (
+                  <li key={appointment.id} className="rounded border p-3">
+                    <Link
+                      className="underline"
+                      href={`/admin/appointments/${appointment.id}`}
+                    >
+                      {appointment.status}
+                    </Link>
+                    <p>
+                      {new Date(appointment.starts_at).toLocaleString("tr-TR")}{" "}
+                      – {new Date(appointment.ends_at).toLocaleString("tr-TR")}
+                    </p>
+                    <p className="text-muted-foreground text-sm">
+                      {appointment.advisor_name ?? "—"} ·{" "}
+                      {appointment.property_title ?? "—"} ·{" "}
+                      {appointment.scheduled_timezone ?? "—"}
+                    </p>
+                  </li>
+                ),
+              )}
+          </ol>
+        )}
+      </section>
+      <section className="space-y-3">
+        <h2 className="font-semibold">Son / geçmiş randevular</h2>
+        {lead.appointments.filter(
+          (appointment: { starts_at: Date }) =>
+            new Date(appointment.starts_at) < new Date(),
+        ).length === 0 ? (
+          <p className="text-muted-foreground text-sm">Geçmiş randevu yok.</p>
+        ) : (
+          <ol className="space-y-2">
+            {lead.appointments
+              .filter(
+                (appointment: { starts_at: Date }) =>
+                  new Date(appointment.starts_at) < new Date(),
+              )
+              .map(
+                (appointment: {
+                  id: string;
+                  status: string;
+                  starts_at: Date;
+                  ends_at: Date;
+                  scheduled_timezone: string | null;
+                  advisor_name: string | null;
+                  property_title: string | null;
+                }) => (
+                  <li key={appointment.id} className="rounded border p-3">
+                    <Link
+                      className="underline"
+                      href={`/admin/appointments/${appointment.id}`}
+                    >
+                      {appointment.status}
+                    </Link>
+                    <p>
+                      {new Date(appointment.starts_at).toLocaleString("tr-TR")}{" "}
+                      – {new Date(appointment.ends_at).toLocaleString("tr-TR")}
+                    </p>
+                    <p className="text-muted-foreground text-sm">
+                      {appointment.advisor_name ?? "—"} ·{" "}
+                      {appointment.property_title ?? "—"} ·{" "}
+                      {appointment.scheduled_timezone ?? "—"}
+                    </p>
+                  </li>
+                ),
+              )}
+          </ol>
+        )}
+      </section>
       <section>
-        <h2 className="font-semibold">Son hareketler</h2>
+        <h2 className="font-semibold">Birleşik hareket akışı</h2>
         <ol className="mt-3 space-y-2">
-          {lead.activities.map((a: Activity) => (
+          {lead.timeline.map((a: TimelineEntry) => (
             <li
-              key={`${a.occurred_at}-${a.activity_type}`}
+              key={`${a.source}-${a.appointmentId ?? "lead"}-${a.occurredAt}-${a.eventType}`}
               className="rounded border p-3"
             >
-              <b>{a.activity_type}</b>
+              <b>
+                {a.source === "appointment"
+                  ? `RANDEVU · ${a.eventType}`
+                  : a.eventType}
+              </b>
+              {a.appointmentId ? (
+                <Link
+                  className="ml-2 text-sm underline"
+                  href={`/admin/appointments/${a.appointmentId}`}
+                >
+                  Randevuyu aç
+                </Link>
+              ) : null}
               {a.summary ? <p>{a.summary}</p> : null}
               <time className="text-muted-foreground text-xs">
-                {new Date(a.occurred_at).toLocaleString("tr-TR")}
+                {new Date(a.occurredAt).toLocaleString("tr-TR")}
               </time>
             </li>
           ))}
