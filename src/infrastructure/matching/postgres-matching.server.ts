@@ -9,6 +9,10 @@ import type {
   MatchingUnitOfWork,
   PersistedMatch,
 } from "@/application/matching/matching-use-cases";
+import type {
+  MatchingReadRepository,
+  MatchingRequestView,
+} from "@/application/matching/matching-read-model";
 import { ApplicationError } from "@/application/errors/application-error";
 import {
   MATCHING_RULE_VERSION,
@@ -283,5 +287,124 @@ export class PostgresMatchingUnitOfWork implements MatchingUnitOfWork {
     } finally {
       client.release();
     }
+  }
+}
+
+const rangeLabel = (minimum: unknown, maximum: unknown, suffix = "") => {
+  if (minimum !== null && maximum !== null)
+    return `${minimum}–${maximum}${suffix}`;
+  if (minimum !== null) return `${minimum}${suffix} ve üzeri`;
+  if (maximum !== null) return `${maximum}${suffix} ve altı`;
+  return null;
+};
+const componentFor = (code: string) => {
+  if (code.startsWith("LOCATION_")) return "location";
+  if (code.startsWith("BUDGET_")) return "budget";
+  if (code.startsWith("PROPERTY_TYPE_")) return "propertyType";
+  if (code.startsWith("ROOMS_")) return "rooms";
+  if (code.startsWith("AREA_")) return "netArea";
+  if (code.startsWith("FEATURES_")) return "features";
+  return "hardConstraint";
+};
+
+export class PostgresMatchingReadRepository implements MatchingReadRepository {
+  constructor(
+    private readonly pool: Pick<Pool, "query"> = getLocalDatabasePool(),
+  ) {}
+  async get(
+    actor: StaffPrincipal,
+    customerRequestId: string,
+  ): Promise<MatchingRequestView | null> {
+    const request = await this.pool.query(
+      `select cr.*,lt.label listing_type_label,pt.label property_type_label,l.name location_name
+        from public.customer_requests cr join public.customers c on c.id=cr.customer_id and c.deleted_at is null
+        left join public.advisors mine on mine.user_identity_id=$1 and mine.status='active' and mine.deleted_at is null
+        left join public.listing_types lt on lt.id=cr.listing_type_id left join public.property_types pt on pt.id=cr.property_type_id
+        left join public.locations l on l.id=cr.location_id
+       where cr.id=$2 and cr.deleted_at is null and ($3='ADMIN' or c.assigned_advisor_id=mine.id)`,
+      [actor.identityId, customerRequestId, actor.role],
+    );
+    const row = request.rows[0];
+    if (!row) return null;
+    const [features, matches] = await Promise.all([
+      this.pool.query(
+        "select f.label,crf.priority from public.customer_request_features crf join public.property_features f on f.id=crf.feature_id where crf.customer_request_id=$1 and f.deleted_at is null order by crf.priority,f.label",
+        [customerRequestId],
+      ),
+      this.pool.query(
+        `select m.property_id,m.status,m.score,p.title,p.public_id,
+          coalesce(jsonb_agg(jsonb_build_object('code',r.reason_code,'points',r.contribution)) filter(where r.reason_code is not null),'[]'::jsonb) reasons
+          from public.property_customer_matches m
+          join public.properties p on p.id=m.property_id and p.deleted_at is null
+          left join public.property_customer_match_reasons r on r.property_customer_match_id=m.id
+          left join public.advisors mine on mine.user_identity_id=$1 and mine.status='active' and mine.deleted_at is null
+         where m.customer_request_id=$2 and m.deleted_at is null and m.status in ('PROPOSED','REVIEWED','STALE')
+           and ($3='ADMIN' or exists(select 1 from public.property_advisor_assignments paa where paa.property_id=m.property_id and paa.advisor_id=mine.id and paa.ended_at is null))
+         group by m.id,p.title,p.public_id order by m.status='STALE',m.score desc,m.property_id asc`,
+        [actor.identityId, customerRequestId, actor.role],
+      ),
+    ]);
+    const featureValue = features.rows.length
+      ? features.rows
+          .map((item) => `${item.priority}: ${item.label}`)
+          .join(", ")
+      : null;
+    const criterion = (stateValue: unknown, value: string | null) => ({
+      state: state(stateValue),
+      value,
+    });
+    return {
+      id: row.id,
+      profile: {
+        listingType: {
+          state: "CONSTRAINED",
+          value: row.listing_type_label ?? null,
+        },
+        location: criterion(
+          row.matching_location_state,
+          row.location_name ?? null,
+        ),
+        budget: criterion(
+          row.matching_budget_state,
+          row.currency_code
+            ? rangeLabel(
+                row.budget_min_minor,
+                row.budget_max_minor,
+                ` ${row.currency_code}`,
+              )
+            : null,
+        ),
+        propertyType: criterion(
+          row.matching_property_type_state,
+          row.property_type_label ?? null,
+        ),
+        rooms: criterion(
+          row.matching_rooms_state,
+          rangeLabel(row.bedrooms_min, row.bedrooms_max, " oda"),
+        ),
+        netArea: criterion(
+          row.matching_net_area_state,
+          rangeLabel(row.net_area_min, row.net_area_max, " dm²"),
+        ),
+        features: criterion(row.matching_features_state, featureValue),
+      },
+      results: matches.rows.map((match) => {
+        const reasons = match.reasons as { code: string; points: number }[];
+        return {
+          propertyId: match.property_id,
+          propertyTitle: match.title,
+          propertyReference: match.public_id,
+          status: match.status,
+          totalScore: Math.round(Number(match.score) * 100),
+          components: Object.fromEntries(
+            reasons.map((reason) => [
+              componentFor(reason.code),
+              Math.round(Number(reason.points) * 100),
+            ]),
+          ),
+          reasonCodes: reasons.map((reason) => reason.code),
+        };
+      }),
+    };
   }
 }
