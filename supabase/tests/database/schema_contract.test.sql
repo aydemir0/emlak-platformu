@@ -1,20 +1,20 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select extensions.plan(14);
+select extensions.plan(15);
 
 select extensions.is(
   (select count(*)::bigint from pg_catalog.pg_tables where schemaname='public'),
-  48::bigint, 'canonical public schema has exactly 48 tables after Phase 8 lead intake and history tables'
+  49::bigint, 'canonical public schema has exactly 49 tables after Phase 9 appointment event history'
 );
 select extensions.is(
   (select count(*)::bigint from pg_catalog.pg_tables where schemaname='public' and rowsecurity),
-  48::bigint, 'RLS is enabled on all 48 canonical tables'
+  49::bigint, 'RLS is enabled on all 49 canonical tables'
 );
 select extensions.is(
   (select count(*)::bigint from pg_catalog.pg_class c join pg_catalog.pg_namespace n on n.oid=c.relnamespace
    where n.nspname='public' and c.relkind='r' and c.relforcerowsecurity),
-  48::bigint, 'RLS is forced on all 48 canonical tables'
+  49::bigint, 'RLS is forced on all 49 canonical tables'
 );
 select extensions.is(
   (select count(*)::bigint from pg_catalog.pg_policies where schemaname='public' and 'anon'=any(roles)),
@@ -37,6 +37,10 @@ select extensions.is(
 select extensions.ok(
   exists (select 1 from pg_catalog.pg_constraint where conname='appointments_no_advisor_overlap' and contype='x'),
   'appointment overlap exclusion constraint exists'
+);
+select extensions.ok(
+  exists (select 1 from pg_catalog.pg_tables where schemaname='public' and tablename='appointment_events'),
+  'appointment event history is canonical'
 );
 select extensions.ok(
   exists (select 1 from pg_catalog.pg_constraint where conname='public_route_property_taxonomy' and contype='c'),

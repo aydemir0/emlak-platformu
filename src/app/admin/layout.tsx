@@ -26,6 +26,18 @@ export default async function AdminLayout({
             >
               İlanlar
             </Link>
+            <Link
+              className="text-muted-foreground hover:text-foreground text-sm"
+              href="/admin/leads"
+            >
+              Leadler
+            </Link>
+            <Link
+              className="text-muted-foreground hover:text-foreground text-sm"
+              href="/admin/appointments"
+            >
+              Randevular
+            </Link>
           </div>
           <Link
             className="text-muted-foreground hover:text-foreground text-sm"

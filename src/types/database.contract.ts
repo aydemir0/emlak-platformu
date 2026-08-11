@@ -4,6 +4,7 @@ type ExpectedTableNames =
   | "advisors"
   | "analytics_event_definitions"
   | "analytics_events"
+  | "appointment_events"
   | "appointments"
   | "audit_logs"
   | "content_entries"
@@ -56,6 +57,6 @@ type Equal<A, B> =
     : false;
 type Assert<T extends true> = T;
 
-export type DatabaseTablesMatchPhaseEight = Assert<
+export type DatabaseTablesMatchPhaseNine = Assert<
   Equal<keyof Database["public"]["Tables"], ExpectedTableNames>
 >;

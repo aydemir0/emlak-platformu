@@ -183,14 +183,28 @@ export class PostgresLeadCrmReadRepository {
       [actor.identityId, id, actor.role],
     );
     if (!r.rows[0]) return null;
-    const activities = await this.pool.query(
-      "select activity_type,summary,occurred_at,details from public.lead_activities where lead_id=$1 order by occurred_at desc,id desc limit 100",
-      [id],
-    );
+    const [appointments, timeline] = await Promise.all([
+      this.pool.query(
+        "select a.id,a.status,a.starts_at,a.ends_at,a.scheduled_timezone,ad.display_name advisor_name,p.title property_title from public.appointments a left join public.advisors ad on ad.id=a.advisor_id left join public.properties p on p.id=a.property_id and p.deleted_at is null where a.lead_id=$1 and a.deleted_at is null order by (a.starts_at >= now()) desc,a.starts_at desc,a.id desc limit 20",
+        [id],
+      ),
+      this.pool.query(
+        "select source,event_type,summary,occurred_at,appointment_id from (select 'lead'::text source,la.activity_type event_type,la.summary,la.occurred_at,cast(null as uuid) appointment_id,la.id stable_id from public.lead_activities la where la.lead_id=$1 union all select 'appointment'::text source,ae.event_type,cast(null as text) summary,ae.occurred_at,a.id appointment_id,ae.id stable_id from public.appointment_events ae join public.appointments a on a.id=ae.appointment_id where a.lead_id=$1 and a.deleted_at is null) timeline order by occurred_at desc,source asc,stable_id desc limit 100",
+        [id],
+      ),
+    ]);
+    const safeTimeline = timeline.rows.map((row) => ({
+      source: row.source,
+      eventType: row.event_type,
+      summary: row.source === "lead" ? row.summary : null,
+      occurredAt: row.occurred_at,
+      appointmentId: row.appointment_id,
+    }));
     return {
       ...r.rows[0],
       version: BigInt(r.rows[0].version),
-      activities: activities.rows,
+      appointments: appointments.rows,
+      timeline: safeTimeline,
     };
   }
   async advisors() {
