@@ -1115,11 +1115,14 @@ export type Database = {
           converted_by_user_identity_id: string | null
           correlation_id: string
           customer_id: string
+          customer_request_id: string | null
           id: string
           idempotency_key: string
           lead_id: string
           outcome: string
           resolution_code: string
+          resolution_evidence_code: string | null
+          resolution_kind: string | null
           safe_resolution_summary: string | null
         }
         Insert: {
@@ -1127,11 +1130,14 @@ export type Database = {
           converted_by_user_identity_id?: string | null
           correlation_id: string
           customer_id: string
+          customer_request_id?: string | null
           id?: string
           idempotency_key: string
           lead_id: string
           outcome: string
           resolution_code: string
+          resolution_evidence_code?: string | null
+          resolution_kind?: string | null
           safe_resolution_summary?: string | null
         }
         Update: {
@@ -1139,11 +1145,14 @@ export type Database = {
           converted_by_user_identity_id?: string | null
           correlation_id?: string
           customer_id?: string
+          customer_request_id?: string | null
           id?: string
           idempotency_key?: string
           lead_id?: string
           outcome?: string
           resolution_code?: string
+          resolution_evidence_code?: string | null
+          resolution_kind?: string | null
           safe_resolution_summary?: string | null
         }
         Relationships: [
@@ -1159,6 +1168,13 @@ export type Database = {
             columns: ["customer_id"]
             isOneToOne: false
             referencedRelation: "customers"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "lead_conversions_customer_request_id_fkey"
+            columns: ["customer_request_id"]
+            isOneToOne: false
+            referencedRelation: "customer_requests"
             referencedColumns: ["id"]
           },
           {

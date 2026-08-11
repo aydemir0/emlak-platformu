@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select extensions.plan(28);
+select extensions.plan(43);
 
 select extensions.is(
   (select count(*)::bigint from pg_catalog.pg_tables where schemaname='public'),
@@ -72,6 +72,140 @@ select extensions.throws_ok($$with c as (insert into public.customers(display_na
 select extensions.throws_ok($$with c as (insert into public.customers(display_name) values ('tap negative max') returning id) insert into public.customer_requests(customer_id, net_area_max) select id, -1 from c$$, '23514', null, 'negative net_area_max is rejected');
 select extensions.throws_ok($$with c as (insert into public.customers(display_name) values ('tap inverted area') returning id) insert into public.customer_requests(customer_id, matching_net_area_state, net_area_min, net_area_max) select id, 'CONSTRAINED', 20, 10 from c$$, '23514', null, 'inverted constrained net area is rejected');
 select extensions.lives_ok($$with c as (insert into public.customers(display_name) values ('tap valid area') returning id) insert into public.customer_requests(customer_id, matching_net_area_state, net_area_min, net_area_max) select id, 'CONSTRAINED', 10, 20 from c$$, 'valid constrained net area is accepted');
+
+select extensions.is(
+  (select count(*)::bigint from information_schema.columns
+   where table_schema='public' and table_name='lead_conversions'
+     and column_name in ('customer_request_id','resolution_kind','resolution_evidence_code')),
+  3::bigint, 'lead conversion provenance columns are present'
+);
+select extensions.is(
+  (select count(*)::bigint from information_schema.columns
+   where table_schema='public' and table_name='lead_conversions'
+     and column_name in ('customer_request_id','resolution_kind','resolution_evidence_code')
+     and is_nullable='YES'),
+  3::bigint, 'lead conversion provenance remains nullable for legacy rows'
+);
+select extensions.ok(
+  exists (
+    select 1
+    from pg_catalog.pg_constraint fk
+    join pg_catalog.pg_class source_table on source_table.oid=fk.conrelid
+    join pg_catalog.pg_namespace source_schema on source_schema.oid=source_table.relnamespace
+    join pg_catalog.pg_class target_table on target_table.oid=fk.confrelid
+    join pg_catalog.pg_namespace target_schema on target_schema.oid=target_table.relnamespace
+    where fk.conname='lead_conversions_customer_request_id_fkey'
+      and source_schema.nspname='public' and source_table.relname='lead_conversions'
+      and target_schema.nspname='public' and target_table.relname='customer_requests'
+  ), 'conversion request provenance references customer requests'
+);
+select extensions.is(
+  (select fk.confdeltype
+   from pg_catalog.pg_constraint fk
+   where fk.conname='lead_conversions_customer_request_id_fkey'),
+  'r', 'conversion request provenance uses ON DELETE RESTRICT'
+);
+select extensions.lives_ok($sql$
+  with customer as (
+    insert into public.customers(display_name) values ('tap conversion provenance customer') returning id
+  ), lead as (
+    insert into public.leads(submission_id,source,status,email)
+    values (gen_random_uuid(),'TAP','NEW','provenance@example.test') returning id
+  ), customer_request as (
+    insert into public.customer_requests(customer_id) select id from customer returning id
+  )
+  insert into public.lead_conversions(
+    lead_id, customer_id, customer_request_id, outcome, resolution_code,
+    resolution_kind, resolution_evidence_code, idempotency_key, correlation_id
+  )
+  select lead.id, customer.id, customer_request.id, 'CONVERTED', 'TAP_PROVENANCE',
+    'LINKED_EXACT_IDENTITY', 'EXACT_EMAIL_AND_PHONE', gen_random_uuid(), gen_random_uuid()
+  from lead, customer, customer_request;
+$sql$, 'valid bounded conversion provenance codes are accepted');
+select extensions.throws_ok($sql$
+  with customer as (
+    insert into public.customers(display_name) values ('tap invalid conversion kind customer') returning id
+  ), lead as (
+    insert into public.leads(submission_id,source,status,email)
+    values (gen_random_uuid(),'TAP','NEW','invalid-kind@example.test') returning id
+  )
+  insert into public.lead_conversions(
+    lead_id, customer_id, outcome, resolution_code, resolution_kind,
+    idempotency_key, correlation_id
+  )
+  select lead.id, customer.id, 'CONVERTED', 'TAP_INVALID_KIND', 'UNBOUNDED',
+    gen_random_uuid(), gen_random_uuid()
+  from lead, customer;
+$sql$, '23514', null, 'invalid conversion resolution kind is rejected');
+select extensions.throws_ok($sql$
+  with customer as (
+    insert into public.customers(display_name) values ('tap invalid evidence customer') returning id
+  ), lead as (
+    insert into public.leads(submission_id,source,status,email)
+    values (gen_random_uuid(),'TAP','NEW','invalid-evidence@example.test') returning id
+  )
+  insert into public.lead_conversions(
+    lead_id, customer_id, outcome, resolution_code, resolution_evidence_code,
+    idempotency_key, correlation_id
+  )
+  select lead.id, customer.id, 'CONVERTED', 'TAP_INVALID_EVIDENCE', 'RAW_EMAIL',
+    gen_random_uuid(), gen_random_uuid()
+  from lead, customer;
+$sql$, '23514', null, 'invalid conversion evidence code is rejected');
+select extensions.lives_ok($sql$
+  with customer as (
+    insert into public.customers(display_name) values ('tap legacy conversion customer') returning id
+  ), lead as (
+    insert into public.leads(submission_id,source,status,email)
+    values (gen_random_uuid(),'TAP','NEW','legacy-conversion@example.test') returning id
+  )
+  insert into public.lead_conversions(
+    lead_id, customer_id, outcome, resolution_code, idempotency_key, correlation_id
+  )
+  select lead.id, customer.id, 'CONVERTED', 'LEGACY', gen_random_uuid(), gen_random_uuid()
+  from lead, customer;
+$sql$, 'legacy conversion rows remain valid with null new provenance fields');
+select extensions.ok(
+  exists (
+    select 1 from pg_catalog.pg_constraint
+    where conrelid='public.lead_conversions'::regclass and contype='u'
+      and conkey=array[(select attnum from pg_catalog.pg_attribute
+                         where attrelid='public.lead_conversions'::regclass and attname='lead_id')]
+  ), 'one lead remains limited to one conversion record'
+);
+select extensions.ok(
+  exists (
+    select 1 from pg_catalog.pg_constraint
+    where conrelid='public.lead_conversions'::regclass and contype='u'
+      and conkey=array[(select attnum from pg_catalog.pg_attribute
+                         where attrelid='public.lead_conversions'::regclass and attname='idempotency_key')]
+  ), 'conversion idempotency key remains unique'
+);
+select extensions.is(
+  (select data_type from information_schema.columns
+   where table_schema='public' and table_name='lead_conversions' and column_name='correlation_id'),
+  'uuid', 'conversion correlation identifier remains a UUID'
+);
+select extensions.is(
+  (select is_nullable from information_schema.columns
+   where table_schema='public' and table_name='lead_conversions' and column_name='correlation_id'),
+  'NO', 'conversion correlation identifier remains required'
+);
+select extensions.ok(
+  (select rowsecurity from pg_catalog.pg_tables
+   where schemaname='public' and tablename='lead_conversions'),
+  'conversion provenance remains RLS protected'
+);
+select extensions.is(
+  (select count(*)::bigint from information_schema.role_table_grants
+   where table_schema='public' and table_name='lead_conversions' and grantee='anon'),
+  0::bigint, 'anon receives no conversion provenance base-table grant'
+);
+select extensions.ok(
+  exists (select 1 from pg_catalog.pg_indexes
+          where schemaname='public' and indexname='lead_conversions_customer_request_id_idx'),
+  'conversion request provenance has a supporting index'
+);
 
 select * from extensions.finish();
 rollback;
