@@ -1,7 +1,7 @@
 begin;
 create extension if not exists pgtap with schema extensions;
 
-select extensions.plan(15);
+select extensions.plan(28);
 
 select extensions.is(
   (select count(*)::bigint from pg_catalog.pg_tables where schemaname='public'),
@@ -56,6 +56,22 @@ select extensions.ok(
     where n.nspname='private' and p.prosecdef and not ('search_path=""' = any(coalesce(p.proconfig,'{}'::text[])))
   ), 'security-definer functions use an empty safe search_path'
 );
+select extensions.is(
+  (select count(*)::bigint from information_schema.columns where table_schema='public' and table_name='customer_requests' and column_name in ('matching_location_state','matching_budget_state','matching_property_type_state','matching_rooms_state','matching_net_area_state','matching_features_state','net_area_min','net_area_max')),
+  8::bigint, 'matching profile columns are present without adding a table'
+);
+select extensions.ok(exists (select 1 from pg_catalog.pg_constraint where conname='customer_requests_matching_location_state_check'), 'location state is constrained');
+select extensions.ok(exists (select 1 from pg_catalog.pg_constraint where conname='customer_requests_matching_budget_state_check'), 'budget state is constrained');
+select extensions.ok(exists (select 1 from pg_catalog.pg_constraint where conname='customer_requests_matching_property_type_state_check'), 'property type state is constrained');
+select extensions.ok(exists (select 1 from pg_catalog.pg_constraint where conname='customer_requests_matching_rooms_state_check'), 'rooms state is constrained');
+select extensions.ok(exists (select 1 from pg_catalog.pg_constraint where conname='customer_requests_matching_net_area_state_check'), 'net area state is constrained');
+select extensions.ok(exists (select 1 from pg_catalog.pg_constraint where conname='customer_requests_matching_features_state_check'), 'feature state is constrained');
+select extensions.ok(exists (select 1 from pg_catalog.pg_constraint where conname='customer_requests_matching_net_area_state_range_check'), 'net area state/range invariant exists');
+select extensions.is((select column_default from information_schema.columns where table_schema='public' and table_name='customer_requests' and column_name='matching_net_area_state'), '''MISSING''::text', 'legacy requests default to MISSING');
+select extensions.throws_ok($$with c as (insert into public.customers(display_name) values ('tap negative min') returning id) insert into public.customer_requests(customer_id, net_area_min) select id, -1 from c$$, '23514', null, 'negative net_area_min is rejected');
+select extensions.throws_ok($$with c as (insert into public.customers(display_name) values ('tap negative max') returning id) insert into public.customer_requests(customer_id, net_area_max) select id, -1 from c$$, '23514', null, 'negative net_area_max is rejected');
+select extensions.throws_ok($$with c as (insert into public.customers(display_name) values ('tap inverted area') returning id) insert into public.customer_requests(customer_id, matching_net_area_state, net_area_min, net_area_max) select id, 'CONSTRAINED', 20, 10 from c$$, '23514', null, 'inverted constrained net area is rejected');
+select extensions.lives_ok($$with c as (insert into public.customers(display_name) values ('tap valid area') returning id) insert into public.customer_requests(customer_id, matching_net_area_state, net_area_min, net_area_max) select id, 'CONSTRAINED', 10, 20 from c$$, 'valid constrained net area is accepted');
 
 select * from extensions.finish();
 rollback;
