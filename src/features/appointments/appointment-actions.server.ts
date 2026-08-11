@@ -4,7 +4,6 @@ import { randomUUID } from "node:crypto";
 import { headers } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
-import { ApplicationError } from "@/application/errors/application-error";
 import {
   createAppointment,
   mutateAppointment,
@@ -32,26 +31,6 @@ async function context(form: FormData) {
 function revalidate(id: string) {
   revalidatePath("/admin/appointments");
   revalidatePath(`/admin/appointments/${id}`);
-}
-
-export function appointmentUiError(error: unknown): string {
-  if (!(error instanceof ApplicationError))
-    return "İşlem tamamlanamadı. Lütfen tekrar deneyin.";
-  switch (error.code) {
-    case "APPOINTMENT_TIME_CONFLICT":
-      return "Bu danışmanın seçilen saatte başka bir randevusu var.";
-    case "APPOINTMENT_CONFLICT":
-      return "Randevu değişti. Sayfayı yenileyip tekrar deneyin.";
-    case "APPOINTMENT_INVALID_TRANSITION":
-      return "Bu işlem randevunun mevcut durumunda yapılamaz.";
-    case "APPOINTMENT_VALIDATION_FAILED":
-      return "Randevu bilgileri geçerli değil.";
-    case "APPOINTMENT_NOT_FOUND":
-    case "APPOINTMENT_FORBIDDEN":
-      return "Randevu bulunamadı veya bu işlem için yetkiniz yok.";
-    default:
-      return "İşlem tamamlanamadı. Lütfen tekrar deneyin.";
-  }
 }
 
 async function command(
