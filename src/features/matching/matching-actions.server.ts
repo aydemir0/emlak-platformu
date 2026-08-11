@@ -31,14 +31,12 @@ export async function calculateMatchesAction(form: FormData) {
       },
     );
   } catch (error) {
-    const state =
-      error instanceof ApplicationError
-        ? ({
-            MATCHING_CANDIDATE_LIMIT_EXCEEDED: "limit",
-            MATCHING_VALIDATION_FAILED: "invalid",
-            MATCHING_CONFLICT: "conflict",
-          }[error.code] ?? "failed")
-        : "failed";
+    let state = "failed";
+    if (error instanceof ApplicationError) {
+      if (error.code === "MATCHING_CANDIDATE_LIMIT_EXCEEDED") state = "limit";
+      if (error.code === "MATCHING_VALIDATION_FAILED") state = "invalid";
+      if (error.code === "MATCHING_CONFLICT") state = "conflict";
+    }
     redirect(`/admin/customer-requests/${customerRequestId}?matching=${state}`);
   }
   revalidatePath(`/admin/customer-requests/${customerRequestId}`);
