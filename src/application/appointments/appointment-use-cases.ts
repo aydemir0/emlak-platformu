@@ -5,6 +5,10 @@ import {
   assertAppointmentVersion,
   type AppointmentState,
 } from "@/domain/appointments/appointment-lifecycle";
+import {
+  defaultAppointmentReminderPolicy,
+  type AppointmentReminderPolicy,
+} from "@/domain/appointments/appointment-reminder-policy";
 
 export type AppointmentContext = Readonly<{
   actor: StaffPrincipal;
@@ -18,6 +22,7 @@ export type AppointmentRecord = Readonly<{
   advisorId: string | null;
   status: AppointmentState;
   version: bigint;
+  startsAt: Date;
   deletedAt: Date | null;
 }>;
 export interface AppointmentTransaction {
@@ -33,6 +38,7 @@ export interface AppointmentTransaction {
   ): Promise<boolean>;
   insertEvent(values: Record<string, unknown>): Promise<void>;
   insertAudit(values: Record<string, unknown>): Promise<void>;
+  insertOutbox(values: Record<string, unknown>): Promise<void>;
 }
 export interface AppointmentUnitOfWork {
   transaction<T>(work: (tx: AppointmentTransaction) => Promise<T>): Promise<T>;
@@ -105,6 +111,34 @@ async function eventAudit(
     changeSummary: details,
   });
 }
+async function scheduleReminders(
+  tx: AppointmentTransaction,
+  c: AppointmentContext,
+  appointment: AppointmentRecord,
+  startsAt: Date,
+  policy: AppointmentReminderPolicy,
+) {
+  for (const intent of policy.intents({
+    status: appointment.status,
+    startsAt,
+    now: new Date(),
+  })) {
+    const scheduledFor = intent.scheduledFor.toISOString();
+    await tx.insertOutbox({
+      eventName: "appointment.reminder_requested.v1",
+      aggregateId: appointment.id,
+      correlationId: c.correlationId,
+      idempotencyKey: `appointment:${appointment.id}:v${appointment.version}:reminder:${intent.kind}:${scheduledFor}`,
+      payload: {
+        appointmentId: appointment.id,
+        appointmentVersion: appointment.version.toString(),
+        scheduledFor,
+        reminderKind: intent.kind,
+      },
+      nextAttemptAt: intent.scheduledFor,
+    });
+  }
+}
 async function withDenial<T>(
   u: AppointmentUnitOfWork,
   c: AppointmentContext,
@@ -137,6 +171,7 @@ export async function createAppointment(
     endsAt: Date;
     scheduledTimezone: string;
   }>,
+  policy: AppointmentReminderPolicy = defaultAppointmentReminderPolicy,
 ) {
   validTime(input.startsAt, input.endsAt, input.scheduledTimezone);
   return u.transaction(async (tx) => {
@@ -176,6 +211,7 @@ export async function createAppointment(
       throw error;
     }
     await eventAudit(tx, c, a, "CREATED", { status: "REQUESTED", advisorId });
+    await scheduleReminders(tx, c, a, input.startsAt, policy);
     return a;
   });
 }
@@ -199,6 +235,7 @@ export async function mutateAppointment(
     scheduledTimezone?: string;
     advisorId?: string;
   }>,
+  policy: AppointmentReminderPolicy = defaultAppointmentReminderPolicy,
 ) {
   return withDenial(
     u,
@@ -273,6 +310,14 @@ export async function mutateAppointment(
           startsAt: input.startsAt?.toISOString(),
           endsAt: input.endsAt?.toISOString(),
         });
+        const nextStatus = input.status ?? a.status;
+        await scheduleReminders(
+          tx,
+          c,
+          { ...a, status: nextStatus, version: a.version + 1n },
+          input.startsAt ?? a.startsAt,
+          policy,
+        );
       }),
   );
 }

@@ -32,7 +32,7 @@ class Tx implements AppointmentTransaction {
   constructor(private readonly c: PoolClient) {}
   async getAppointment(id: string, lock: boolean) {
     const r = await this.c.query(
-      `select id,lead_id,advisor_id,status,version::text,deleted_at from public.appointments where id=$1 ${lock ? "for update" : ""}`,
+      `select id,lead_id,advisor_id,status,version::text,starts_at,deleted_at from public.appointments where id=$1 ${lock ? "for update" : ""}`,
       [id],
     );
     const x = r.rows[0];
@@ -43,6 +43,7 @@ class Tx implements AppointmentTransaction {
           advisorId: x.advisor_id,
           status: x.status,
           version: BigInt(x.version),
+          startsAt: x.starts_at,
           deletedAt: x.deleted_at,
         }
       : null;
@@ -97,6 +98,7 @@ class Tx implements AppointmentTransaction {
         advisorId: x.advisor_id,
         status: x.status,
         version: BigInt(x.version),
+        startsAt: v.startsAt as Date,
         deletedAt: x.deleted_at,
       };
     } catch (e) {
@@ -142,6 +144,19 @@ class Tx implements AppointmentTransaction {
         v.correlationId,
         v.requestId,
         JSON.stringify(v.changeSummary),
+      ],
+    );
+  }
+  async insertOutbox(v: Record<string, unknown>) {
+    await this.c.query(
+      "insert into public.outbox_messages(event_name,owning_domain,aggregate_type,event_version,aggregate_id,correlation_id,idempotency_key,payload,next_attempt_at) values($1,'appointments','appointment',1,$2,$3,$4,$5,$6)",
+      [
+        v.eventName,
+        v.aggregateId,
+        v.correlationId,
+        v.idempotencyKey,
+        JSON.stringify(v.payload),
+        v.nextAttemptAt,
       ],
     );
   }

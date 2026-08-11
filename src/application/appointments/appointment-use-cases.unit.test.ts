@@ -27,6 +27,7 @@ class FakeUow implements AppointmentUnitOfWork {
       advisorId: "60000000-0000-4000-8000-000000000001",
       status: "REQUESTED",
       version: 1n,
+      startsAt: new Date("2099-01-01T10:00:00Z"),
       deletedAt: null,
     }),
     currentAdvisorId: async () => "60000000-0000-4000-8000-000000000001",
@@ -38,6 +39,7 @@ class FakeUow implements AppointmentUnitOfWork {
       advisorId: id,
       status: "REQUESTED",
       version: 1n,
+      startsAt: new Date("2099-01-01T10:00:00Z"),
       deletedAt: null,
     }),
     mutate: async () => {
@@ -49,6 +51,9 @@ class FakeUow implements AppointmentUnitOfWork {
     },
     insertAudit: async () => {
       this.calls.push("audit");
+    },
+    insertOutbox: async () => {
+      this.calls.push("outbox");
     },
   };
   async transaction<T>(work: (tx: AppointmentTransaction) => Promise<T>) {
@@ -70,7 +75,14 @@ describe("appointment commands", () => {
       eventType: "CONFIRMED",
       status: "CONFIRMED",
     });
-    expect(u.calls).toEqual(["begin", "mutate", "event", "audit", "commit"]);
+    expect(u.calls).toEqual([
+      "begin",
+      "mutate",
+      "event",
+      "audit",
+      "outbox",
+      "commit",
+    ]);
   });
   it("rejects stale and unauthorized mutation", async () => {
     const u = new FakeUow();
