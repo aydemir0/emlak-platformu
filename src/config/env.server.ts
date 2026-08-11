@@ -4,6 +4,13 @@ import { parsePublicEnv } from "@/config/env.client";
 
 const serviceRoleSchema = z.string().min(20);
 const leadHmacSecretSchema = z.string().min(32);
+export const MATCHING_CANDIDATE_LIMIT_DEFAULT = 500;
+const matchingCandidateLimitSchema = z.coerce
+  .number()
+  .int()
+  .positive()
+  .max(10_000)
+  .default(MATCHING_CANDIDATE_LIMIT_DEFAULT);
 
 const localDatabaseUrlSchema = z
   .string()
@@ -58,6 +65,9 @@ export function parseServerEnv(values: Record<string, string | undefined>) {
       .max(86_400)
       .default(900)
       .parse(values.LEAD_RATE_LIMIT_WINDOW_SECONDS),
+    MATCHING_CANDIDATE_LIMIT: matchingCandidateLimitSchema.parse(
+      values.MATCHING_CANDIDATE_LIMIT,
+    ),
     LOCAL_DATABASE_URL: localDatabaseUrlSchema.parse(values.LOCAL_DATABASE_URL),
     R2:
       configuredR2Values.length === 4

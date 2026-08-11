@@ -51,7 +51,7 @@ describe("Postgres appointment reminder worker", () => {
     ]);
     expect([...a, ...b].filter((item) => item.id === id)).toHaveLength(1);
     await pool.query(
-      "update public.outbox_messages set lease_expires_at=now()-interval '1 second' where id=$1",
+      "update public.outbox_messages set lease_expires_at=now()-interval '1 second',next_attempt_at='epoch'::timestamptz where id=$1",
       [id],
     );
     const reclaimed = await second.claim("two", 1, 60_000);

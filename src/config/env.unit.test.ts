@@ -11,6 +11,23 @@ const leadIntakeHmacSecret =
   "lead-intake-test-secret-with-at-least-32-characters";
 
 describe("environment boundaries", () => {
+  it("uses the centralized matching candidate default and rejects invalid overrides", () => {
+    const values = {
+      ...publicValues,
+      SUPABASE_SERVICE_ROLE_KEY: "server-only-service-role-key",
+      LEAD_INTAKE_HMAC_SECRET: leadIntakeHmacSecret,
+      LOCAL_DATABASE_URL:
+        "postgresql://postgres:postgres@127.0.0.1:55322/postgres",
+    };
+    expect(parseServerEnv(values).MATCHING_CANDIDATE_LIMIT).toBe(500);
+    expect(
+      parseServerEnv({ ...values, MATCHING_CANDIDATE_LIMIT: "3" })
+        .MATCHING_CANDIDATE_LIMIT,
+    ).toBe(3);
+    expect(() =>
+      parseServerEnv({ ...values, MATCHING_CANDIDATE_LIMIT: "0" }),
+    ).toThrow();
+  });
   it("returns only public-safe Supabase values from client configuration", () => {
     expect(
       parsePublicEnv({ ...publicValues, SUPABASE_SERVICE_ROLE_KEY: "secret" }),

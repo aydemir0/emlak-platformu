@@ -762,6 +762,14 @@ export type Database = {
           idempotency_key: string | null
           listing_type_id: string | null
           location_id: string | null
+          matching_budget_state: string
+          matching_features_state: string
+          matching_location_state: string
+          matching_net_area_state: string
+          matching_property_type_state: string
+          matching_rooms_state: string
+          net_area_max: number | null
+          net_area_min: number | null
           notes: string | null
           property_type_id: string | null
           status: string
@@ -782,6 +790,14 @@ export type Database = {
           idempotency_key?: string | null
           listing_type_id?: string | null
           location_id?: string | null
+          matching_budget_state?: string
+          matching_features_state?: string
+          matching_location_state?: string
+          matching_net_area_state?: string
+          matching_property_type_state?: string
+          matching_rooms_state?: string
+          net_area_max?: number | null
+          net_area_min?: number | null
           notes?: string | null
           property_type_id?: string | null
           status?: string
@@ -802,6 +818,14 @@ export type Database = {
           idempotency_key?: string | null
           listing_type_id?: string | null
           location_id?: string | null
+          matching_budget_state?: string
+          matching_features_state?: string
+          matching_location_state?: string
+          matching_net_area_state?: string
+          matching_property_type_state?: string
+          matching_rooms_state?: string
+          net_area_max?: number | null
+          net_area_min?: number | null
           notes?: string | null
           property_type_id?: string | null
           status?: string
