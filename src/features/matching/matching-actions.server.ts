@@ -34,8 +34,8 @@ export async function calculateMatchesAction(form: FormData) {
     let state = "failed";
     if (error instanceof ApplicationError) {
       if (error.code === "MATCHING_CANDIDATE_LIMIT_EXCEEDED") state = "limit";
-      if (error.code === "MATCHING_VALIDATION_FAILED") state = "invalid";
-      if (error.code === "MATCHING_CONFLICT") state = "conflict";
+      if (error.code === "MATCHING_INPUT_INVALID") state = "invalid";
+      if (error.code === "MATCHING_CONCURRENCY_CONFLICT") state = "conflict";
     }
     redirect(`/admin/customer-requests/${customerRequestId}?matching=${state}`);
   }

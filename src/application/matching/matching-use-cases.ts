@@ -99,8 +99,8 @@ export async function refreshCustomerRequestMatches(
     input.candidateLimit <= 0
   ) {
     throw new ApplicationError(
-      "MATCHING_VALIDATION_FAILED",
-      "MATCHING_VALIDATION_FAILED",
+      "MATCHING_INPUT_INVALID",
+      "MATCHING_INPUT_INVALID",
     );
   }
 
@@ -111,7 +111,10 @@ export async function refreshCustomerRequestMatches(
     );
     if (!profile) {
       // Direct identifiers remain non-enumerating across staff scope boundaries.
-      throw new ApplicationError("MATCHING_NOT_FOUND", "MATCHING_NOT_FOUND");
+      throw new ApplicationError(
+        "MATCHING_REQUEST_NOT_FOUND",
+        "MATCHING_REQUEST_NOT_FOUND",
+      );
     }
     const candidates = await transaction.loadCandidates(
       context.actor,

@@ -29,8 +29,8 @@ const asBigInt = (value: unknown) =>
 const state = (value: unknown): State => {
   if (typeof value !== "string" || !states.includes(value as State)) {
     throw new ApplicationError(
-      "MATCHING_VALIDATION_FAILED",
-      "MATCHING_VALIDATION_FAILED",
+      "MATCHING_INPUT_INVALID",
+      "MATCHING_INPUT_INVALID",
     );
   }
   return value as State;
@@ -39,8 +39,8 @@ function preference<T>(mode: State, value: T | undefined): Preference<T> {
   if (mode !== "CONSTRAINED") return { mode };
   if (value === undefined) {
     throw new ApplicationError(
-      "MATCHING_VALIDATION_FAILED",
-      "MATCHING_VALIDATION_FAILED",
+      "MATCHING_INPUT_INVALID",
+      "MATCHING_INPUT_INVALID",
     );
   }
   return { mode, value };
@@ -144,8 +144,8 @@ class PostgresMatchingTransaction implements MatchingTransaction {
     } catch (error) {
       if (error instanceof ApplicationError) throw error;
       throw new ApplicationError(
-        "MATCHING_VALIDATION_FAILED",
-        "MATCHING_VALIDATION_FAILED",
+        "MATCHING_INPUT_INVALID",
+        "MATCHING_INPUT_INVALID",
         { cause: error },
       );
     }

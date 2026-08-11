@@ -65,6 +65,13 @@ preparation. No analytics provider or worker implementation.
 typecheck, lint, formatting, build, secret/remote-reference scans, and diff
 check.
 
+## Completion note
+
+Packages B through D are implemented. Package C uses the approved additive
+profile migration and a stale-only trigger migration; Package D adds the
+server-rendered `/admin/customer-requests/[id]` matching workflow. No worker,
+notification, customer portal, or automatic recalculation is included.
+
 ## Deferred decisions
 
 See the Phase 10 requirements specification for candidate limit/SLO, future

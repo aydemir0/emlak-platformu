@@ -179,3 +179,17 @@ or safe no-op, never a last-write-wins result.
 - staff UI permission code and whether a match refresh is manual-only or also
   triggered by a later approved worker;
 - retention/review visibility of persisted match explanations.
+
+## Implementation final state (Phase 10)
+
+- `customer_requests` owns the persisted V2 profile. Six explicit criterion
+  states preserve `MISSING`, `FLEXIBLE`, and `CONSTRAINED` semantics.
+- `MATCHING_CANDIDATE_LIMIT` has one server-side default of `500`; selection
+  reads one additional candidate and rejects overflow without partial ranking.
+- Existing match/reason tables persist the `matching-v2` rule, score, stable
+  reason codes, SHA-256 basis fingerprints, and current/stale generations.
+- Stale invalidation covers matching request/profile fields, request features,
+  property matching fields, and property feature assignments.
+- The admin request detail is server-rendered. ADVISOR access requires both
+  trusted CRM request scope and property assignment scope; no browser scoring
+  or client authorization is used.
