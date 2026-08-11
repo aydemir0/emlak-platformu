@@ -2,7 +2,7 @@
 
 ## Status and purpose
 
-**Status:** Approved design; implementation is deferred to Packages B–E.
+**Status:** Implemented in Phase 9 Packages B–D; Package E verification in progress.
 
 This specification adds a staff-operated appointment/viewing aggregate to the
 lead CRM. An appointment belongs to exactly one lead, optionally references a
@@ -17,10 +17,9 @@ The existing `public.appointments` table predates Phase 9. It is customer-owned
 currently prevents half-open overlap for the same non-null advisor when the row
 is not deleted and is not `CANCELLED`.
 
-That is not the Phase 9 ownership model. Phase 9 makes `lead_id` required and
-treats the existing advisor relationship as the responsible assignment. The
-future migration must use expand/migrate/contract; it must not silently invent
-a customer or convert a lead. Package A creates no migration.
+Phase 9 uses an expand-first migration: new appointments are lead-owned, while
+`lead_id` remains nullable to preserve legacy customer-owned rows. It does not
+invent a customer, convert a lead, delete a row, or impose a backfill.
 
 ## Scope
 
@@ -38,29 +37,29 @@ export/delete/restore, and public appointment booking.
 `appointments` remains the authoritative mutable aggregate. PostgreSQL owns its
 state; an outbox message is only a durable request for later side effects.
 
-| Field                                                        | Proposed contract                                         | Notes                                                                     |
-| ------------------------------------------------------------ | --------------------------------------------------------- | ------------------------------------------------------------------------- |
-| `id`                                                         | UUID primary key                                          | Existing UUID strategy remains.                                           |
-| `lead_id`                                                    | required FK to `leads(id)`, `RESTRICT` update/delete      | Exactly one owner.                                                        |
-| `property_id`                                                | nullable FK to `properties(id)`, `RESTRICT` update/delete | A viewing may be lead-only before selection.                              |
-| `advisor_id`                                                 | required FK to `advisors(id)`, `RESTRICT` update/delete   | Retain the existing physical name; it means assigned responsible advisor. |
-| `status`                                                     | required checked text                                     | `REQUESTED`, `CONFIRMED`, `COMPLETED`, `CANCELLED`, `NO_SHOW`.            |
-| `starts_at`, `ends_at`                                       | required UTC `timestamptz` with `ends_at > starts_at`     | Existing half-open range semantics remain.                                |
-| `scheduled_timezone`                                         | required IANA timezone text in target schema              | Context/display only; application validates IANA value.                   |
-| `location_note`, `notes`                                     | nullable bounded staff-only text                          | Never copied to audit, analytics, or generic outbox payloads.             |
-| `resolution_reason_code`, `resolution_note`                  | nullable terminal-outcome fields                          | For cancellation/no-show only; no product enum is introduced.             |
-| `version`                                                    | required positive bigint                                  | Compared by every mutation.                                               |
-| `created_by_user_identity_id`, `updated_by_user_identity_id` | trusted actor FKs                                         | Derived server-side, never from request input.                            |
-| `idempotency_key`                                            | creation-command unique key                               | Exact create retry only.                                                  |
-| timestamps / `deleted_at`                                    | existing metadata                                         | Delete/restore stays out of scope.                                        |
+| Field                                                        | Proposed contract                                         | Notes                                                                      |
+| ------------------------------------------------------------ | --------------------------------------------------------- | -------------------------------------------------------------------------- |
+| `id`                                                         | UUID primary key                                          | Existing UUID strategy remains.                                            |
+| `lead_id`                                                    | nullable FK to `leads(id)`, `RESTRICT` update/delete      | Required by new command paths; null preserves legacy customer rows.        |
+| `property_id`                                                | nullable FK to `properties(id)`, `RESTRICT` update/delete | A viewing may be lead-only before selection.                               |
+| `advisor_id`                                                 | required FK to `advisors(id)`, `RESTRICT` update/delete   | Retain the existing physical name; it means assigned responsible advisor.  |
+| `status`                                                     | required checked text                                     | `REQUESTED`, `CONFIRMED`, `COMPLETED`, `CANCELLED`, `NO_SHOW`.             |
+| `starts_at`, `ends_at`                                       | required UTC `timestamptz` with `ends_at > starts_at`     | Existing half-open range semantics remain.                                 |
+| `scheduled_timezone`                                         | nullable nonblank display timezone                        | New command paths require a supplied timezone; legacy values are retained. |
+| `location_note`, `notes`                                     | nullable bounded staff-only text                          | Never copied to audit, analytics, or generic outbox payloads.              |
+| `resolution_reason_code`, `resolution_note`                  | nullable terminal-outcome fields                          | For cancellation/no-show only; no product enum is introduced.              |
+| `version`                                                    | required positive bigint                                  | Compared by every mutation.                                                |
+| `created_by_user_identity_id`, `updated_by_user_identity_id` | trusted actor FKs                                         | Derived server-side, never from request input.                             |
+| `idempotency_key`                                            | creation-command unique key                               | Exact create retry only.                                                   |
+| timestamps / `deleted_at`                                    | existing metadata                                         | Delete/restore stays out of scope.                                         |
 
-Package B proposes an append-only `appointment_events` table, rather than
-duplicating appointment actions into `lead_activities`.
+Package B added the append-only `appointment_events` table; appointment actions
+are not duplicated into `lead_activities`.
 
 | Field                                      | Contract                                                                                                                    |
 | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------- |
 | `id`, `appointment_id`, `occurred_at`      | immutable identity, required appointment FK, UTC instant                                                                    |
-| `event_type`                               | checked: `CREATED`, `CONFIRMED`, `RESCHEDULED`, `CANCELLED`, `COMPLETED`, `NO_SHOW`, `ADVISOR_REASSIGNED`                   |
+| `event_type`                               | checked: `CREATED`, `CONFIRMED`, `RESCHEDULED`, `CANCELLED`, `COMPLETED`, `NO_SHOW`, `ASSIGNED`, `REASSIGNED`               |
 | `actor_user_identity_id`, `correlation_id` | trusted actor and request/job correlation evidence                                                                          |
 | `source_idempotency_key`                   | unique nullable command key; a replay returns the existing result                                                           |
 | `event_data`                               | allowlisted JSONB: status, old/new schedule, advisor IDs, non-PII reason code; never notes, contact data, or exact location |
@@ -123,11 +122,10 @@ advisor identity, lead scope, or assignment.
 | Assign/reassign                            | Allowed                                 | Denied                                 | Advisor change is privileged-only.               |
 | Event/timeline read                        | Audit policy allows                     | Only own authorized appointment events | Correlated appointment visibility.               |
 
-Existing advisor RLS is customer-based (`can_manage_customer`) and therefore
-does not align. Package B replaces it with narrowly reviewed lead-scope
-policies, keeps force RLS/deny-by-default, and creates no `anon` grant/policy or
-general bypass helper. Sensitive denials use the Phase 8 durable denial-audit
-boundary with safe fields only.
+Package B conservatively splits legacy customer rows from new lead-owned rows:
+new advisor access requires self-assignment and trusted lead scope; legacy rows
+retain their existing safe customer scope. Force RLS/deny-by-default remains;
+no `anon` grant/policy or general bypass helper was added.
 
 ## CRM timeline and audit contract
 
@@ -142,9 +140,7 @@ audit, or outbox JSON.
 ## Outbox and reminder contract
 
 Use the existing PostgreSQL outbox claim/lease/retry/idempotency contract. No
-queue, event bus, or real provider is added. Eligible producer intents are
-`appointment.created.v1`, `appointment.confirmed.v1`,
-`appointment.rescheduled.v1`, `appointment.cancelled.v1`, and
+queue, event bus, or real provider is added. The implemented producer intent is
 `appointment.reminder_requested.v1`.
 
 Payloads contain references only: appointment ID/version, event ID/type,
@@ -152,7 +148,9 @@ correlation ID, and a non-PII reminder key. A later authorized dispatcher
 re-reads current appointment/contact data. Provider failure never rolls back
 the authoritative transaction.
 
-Reminder work is scheduled by outbox due/next-attempt data. Its idempotency key
+Reminder work is scheduled by outbox due/next-attempt data. The configurable
+default emits one standard reminder 24 hours before a future `CONFIRMED`
+appointment; terminal and `REQUESTED` appointments emit none. Its idempotency key
 derives from appointment ID, version, and reminder key. Before delivery the
 consumer rechecks that the appointment is non-deleted, `CONFIRMED`, and has the
 expected version/schedule. Reschedule/cancel therefore suppresses stale work
@@ -167,7 +165,7 @@ history, lifecycle controls, and admin-only assignment. Lead detail receives a
 bounded appointment section/timeline. Repositories preload lead/property/advisor
 summaries to avoid N+1; UI owns no lifecycle, availability, or authorization.
 
-## Acceptance criteria for later packages
+## Implemented acceptance criteria
 
 - No appointment exists without an authorized lead and responsible advisor.
 - Only the documented graph is accepted; terminal states never reopen.
@@ -179,13 +177,8 @@ summaries to avoid N+1; UI owns no lifecycle, availability, or authorization.
 
 ## Open decisions
 
-1. Safe backfill/retirement strategy if legacy customer-owned rows exist.
-2. Whether `scheduled_timezone` is required at create and the default if absent;
-   the design recommends required IANA input rather than guessing.
-3. Mode/location and cancellation/no-show reason vocabularies; none are defined here.
-4. Reason-code requiredness and retention/redaction of optional terminal notes.
-5. Reminder offsets, channels, consent/quiet hours, and scheduler runtime.
-6. Whether an advisor can create `CONFIRMED`, or only `REQUESTED`, appointments.
-7. Whether lead scope alone permits advisor create/confirm/reschedule or an
-   additional explicit appointment permission is required.
-8. Final pagination caps and searchable fields after observing operations.
+1. Safe future retirement/backfill strategy for legacy customer-owned rows.
+2. Final reminder timings, kinds, recipient resolution, consent and quiet-hours policy.
+3. Notification provider and scheduler runtime.
+4. Mode/location and cancellation/no-show reason vocabularies and retention.
+5. Final IANA timezone validation/default policy.

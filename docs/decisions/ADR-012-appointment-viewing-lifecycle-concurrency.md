@@ -2,7 +2,7 @@
 
 ## Status
 
-Proposed — Phase 9 Package A design, 2026-08-10.
+Accepted — implemented in Phase 9 Packages B–D, 2026-08-10.
 
 ## Context
 
@@ -15,7 +15,7 @@ authoritative.
 
 ## Decision
 
-Appointments are a separate, lead-owned aggregate. Each has one `lead_id`, an
+Appointments are a separate, lead-owned aggregate for new command paths. Each has one `lead_id`, an
 optional `property_id`, and one assigned advisor. Its lifecycle is independent
 from the lead lifecycle:
 
@@ -68,12 +68,10 @@ Rejected: two histories drift. The read model projects one source.
 
 ## Consequences
 
-The existing relation needs an expand/migrate/contract migration before runtime
-implementation. Customer-based RLS policies must be replaced with lead-scope
-policies, generated types change, and writes need a transaction-capable use
-case. The system gains collision prevention, reschedule evidence, and a clean
-future notification boundary at the cost of legacy-row handling and scheduled
-outbox reconciliation.
+The implemented expand-first migration preserves customer-owned legacy rows by
+keeping `lead_id` nullable; new command paths are lead-owned. RLS separates
+legacy customer scope from new lead scope, generated types reflect the added
+`appointment_events` table, and writes use a transaction-capable use case.
 
 ## Security impact
 

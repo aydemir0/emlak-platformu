@@ -2,8 +2,9 @@
 
 ## Status
 
-Package A is design-only and complete. Packages B–E require separate explicit
-approval. No migration or runtime implementation is authorized by this plan.
+Packages A–D are implemented and verified. Package E finalizes documentation,
+verification, and PR preparation. This plan records the delivered boundaries;
+it does not authorize future provider or scheduler work.
 
 ## Shared guardrails
 
@@ -16,7 +17,7 @@ approval. No migration or runtime implementation is authorized by this plan.
 - Do not add queue/event bus, provider integration, customer conversion, public
   portal, export, delete, or restore workflows.
 
-## Package B — Schema and domain foundation
+## Package B — Schema and domain foundation — complete
 
 **Estimated scope:** reviewable expand/migrate/contract migration sequence,
 generated types, lifecycle/errors, repository contracts, and focused DB/domain
@@ -38,7 +39,7 @@ existing rows cannot safely gain a lead, stop before tightening constraints.
 **Evidence:** local reset/migration, focused pgTAP, generated-type no-drift,
 focused tests, typecheck, and diff check.
 
-## Package C — Staff commands and read models
+## Package C — Staff commands and read models — complete
 
 **Estimated scope:** application use cases, thin delivery adapters, SSR
 `/admin/appointments` and `/admin/appointments/{id}`, plus lead-detail
@@ -61,7 +62,7 @@ appointment/timeline projection.
 **Evidence:** focused unit/integration/database tests, typecheck, lint/format,
 build of affected routes where supported, and diff check.
 
-## Package D — Outbox and reminder boundary
+## Package D — Outbox and reminder boundary — complete
 
 **Estimated scope:** provider-independent appointment intent producer/consumer
 contract, scheduled outbox semantics, focused worker tests; no provider or
@@ -79,7 +80,7 @@ scheduler runtime.
 
 **Evidence:** focused integration tests with no real outbound network call.
 
-## Package E — Final verification and documentation
+## Package E — Final verification and documentation — in progress
 
 **Estimated scope:** reconcile docs to implementation, full verification, and
 PR preparation only after B–D have approval and completion.
