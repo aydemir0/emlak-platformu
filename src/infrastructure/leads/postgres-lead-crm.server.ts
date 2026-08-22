@@ -179,7 +179,16 @@ export class PostgresLeadCrmReadRepository {
   }
   async get(actor: StaffPrincipal, id: string) {
     const r = await this.pool.query(
-      `select l.*,p.title property_title,p.public_id,a.display_name advisor_name from public.leads l left join public.properties p on p.id=l.property_id and p.deleted_at is null left join public.advisors a on a.id=l.assigned_advisor_id left join public.advisors mine on mine.user_identity_id=$1 and mine.status='active' and mine.deleted_at is null where l.id=$2 and l.deleted_at is null and ($3='ADMIN' or l.assigned_advisor_id=mine.id)`,
+      `select l.*,p.title property_title,p.public_id,a.display_name advisor_name,
+        lc.customer_id conversion_customer_id,lc.customer_request_id conversion_customer_request_id,
+        lc.outcome conversion_outcome,lc.resolution_kind conversion_resolution_kind,
+        lc.converted_at conversion_converted_at
+       from public.leads l
+       left join public.properties p on p.id=l.property_id and p.deleted_at is null
+       left join public.advisors a on a.id=l.assigned_advisor_id
+       left join public.lead_conversions lc on lc.lead_id=l.id
+       left join public.advisors mine on mine.user_identity_id=$1 and mine.status='active' and mine.deleted_at is null
+       where l.id=$2 and l.deleted_at is null and ($3='ADMIN' or l.assigned_advisor_id=mine.id)`,
       [actor.identityId, id, actor.role],
     );
     if (!r.rows[0]) return null;

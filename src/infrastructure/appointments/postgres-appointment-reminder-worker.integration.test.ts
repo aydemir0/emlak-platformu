@@ -12,7 +12,7 @@ async function message() {
   const id = randomUUID();
   ids.push(id);
   await pool.query(
-    "insert into public.outbox_messages(id,event_name,owning_domain,aggregate_type,event_version,aggregate_id,correlation_id,idempotency_key,payload,next_attempt_at) values($1,'appointment.reminder_requested.v1','appointments','appointment',1,$2,$3,$4,$5,now())",
+    "insert into public.outbox_messages(id,event_name,owning_domain,aggregate_type,event_version,aggregate_id,correlation_id,idempotency_key,payload,next_attempt_at) values($1,'appointment.reminder_requested.v1','appointments','appointment',1,$2,$3,$4,$5,'-infinity'::timestamptz)",
     [
       id,
       randomUUID(),
@@ -51,7 +51,7 @@ describe("Postgres appointment reminder worker", () => {
     ]);
     expect([...a, ...b].filter((item) => item.id === id)).toHaveLength(1);
     await pool.query(
-      "update public.outbox_messages set lease_expires_at=now()-interval '1 second',next_attempt_at='epoch'::timestamptz where id=$1",
+      "update public.outbox_messages set lease_expires_at=now()-interval '1 second',next_attempt_at='-infinity'::timestamptz where id=$1",
       [id],
     );
     const reclaimed = await second.claim("two", 1, 60_000);

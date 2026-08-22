@@ -1,5 +1,5 @@
 begin;
-select extensions.plan(7);
+select extensions.plan(10);
 
 insert into public.property_types(id,code,label) values ('41000000-0000-4000-8000-000000000001','TEST','Test');
 insert into public.locations(id,level,name,normalized_name) values ('41000000-0000-4000-8000-000000000002','CITY','İstanbul','istanbul');
@@ -52,6 +52,27 @@ select extensions.ok(
   exists (select 1 from pg_indexes where schemaname='public' and indexname='outbox_messages_lease_idx'),
   'expired processing leases have a recovery index'
 );
+
+select extensions.throws_ok($sql$
+  insert into public.leads(submission_id,source,status,email)
+  values (gen_random_uuid(),'TAP','QUALIFIED','qualified-conversion-lifecycle@example.test');
+  update public.leads set status='WON'
+  where email='qualified-conversion-lifecycle@example.test';
+$sql$, '23514', null, 'QUALIFIED to WON requires conversion provenance');
+
+select extensions.throws_ok($sql$
+  insert into public.leads(submission_id,source,status,email)
+  values (gen_random_uuid(),'TAP','VIEWING','viewing-conversion-lifecycle@example.test');
+  update public.leads set status='WON'
+  where email='viewing-conversion-lifecycle@example.test';
+$sql$, '23514', null, 'VIEWING to WON requires conversion provenance');
+
+select extensions.throws_ok($sql$
+  insert into public.leads(submission_id,source,status,email)
+  values (gen_random_uuid(),'TAP','NEGOTIATION','negotiation-conversion-lifecycle@example.test');
+  update public.leads set status='WON'
+  where email='negotiation-conversion-lifecycle@example.test';
+$sql$, '23514', null, 'NEGOTIATION to WON requires conversion provenance');
 
 select * from extensions.finish();
 rollback;

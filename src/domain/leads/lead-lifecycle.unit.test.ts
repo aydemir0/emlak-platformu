@@ -9,7 +9,14 @@ describe("lead lifecycle", () => {
   it("allows the locked commercial progression", () => {
     expect(LEAD_STATE_TRANSITIONS.NEW).toEqual(["CONTACTED", "LOST"]);
     expect(() => assertLeadTransition("NEW", "CONTACTED")).not.toThrow();
-    expect(() => assertLeadTransition("NEGOTIATION", "WON")).not.toThrow();
+  });
+
+  it("keeps conversion-only WON shortcuts out of ordinary status changes", () => {
+    for (const state of ["QUALIFIED", "VIEWING", "NEGOTIATION"] as const) {
+      expect(() => assertLeadTransition(state, "WON")).toThrow(
+        "LEAD_INVALID_TRANSITION",
+      );
+    }
   });
 
   it("allows every non-terminal state to move to LOST", () => {
