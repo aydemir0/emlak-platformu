@@ -310,13 +310,16 @@ export async function convertLeadToCustomer(
       assertNewConversion(lead);
 
       const identities = identitiesFromLead(lead);
+      const trustedCandidates = input.explicitCustomerId
+        ? []
+        : await tx.findTrustedIdentityCandidates(identities);
       const resolution: IdentityResolution = input.explicitCustomerId
         ? resolveCustomerIdentity({
             explicitCustomerId: input.explicitCustomerId,
             candidates: [],
           })
         : resolveCustomerIdentity({
-            candidates: await tx.findTrustedIdentityCandidates(identities),
+            candidates: trustedCandidates,
           });
       if (resolution.kind === "IDENTITY_CONFLICT") {
         throw new ApplicationError(
@@ -382,7 +385,12 @@ export async function convertLeadToCustomer(
         actorUserIdentityId: context.actor.identityId,
         outcome: "WON",
         resolutionKind,
-        resolutionEvidenceCode: evidenceFor(resolutionKind, identities),
+        resolutionEvidenceCode: evidenceFor(
+          resolutionKind,
+          resolutionKind === "LINKED_EXACT_IDENTITY"
+            ? trustedCandidates.map((candidate) => candidate.identity)
+            : identities,
+        ),
         idempotencyKey: context.idempotencyKey,
         correlationId: context.correlationId,
       });

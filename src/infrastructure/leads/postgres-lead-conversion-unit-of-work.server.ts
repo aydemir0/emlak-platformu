@@ -200,7 +200,8 @@ class PostgresLeadConversionTransaction implements LeadConversionTransaction {
   async transitionLeadToWon(leadId: string): Promise<boolean> {
     const result = await this.client.query(
       `update public.leads set status='WON',version=version+1,updated_at=now()
-       where id=$1 and status='NEGOTIATION' and deleted_at is null`,
+       where id=$1 and status in ('QUALIFIED','VIEWING','NEGOTIATION')
+         and deleted_at is null`,
       [leadId],
     );
     return result.rowCount === 1;

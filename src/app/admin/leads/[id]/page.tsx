@@ -10,16 +10,11 @@ import {
 } from "@/features/leads/lead-actions.server";
 import { LeadConversionForm } from "@/features/leads/components/lead-conversion-form";
 import { resolutionKindLabel } from "@/features/leads/lead-conversion-presentation";
+import {
+  LEAD_STATE_TRANSITIONS,
+  type LeadState,
+} from "@/domain/leads/lead-lifecycle";
 export const dynamic = "force-dynamic";
-const states = [
-  "NEW",
-  "CONTACTED",
-  "QUALIFIED",
-  "VIEWING",
-  "NEGOTIATION",
-  "WON",
-  "LOST",
-];
 type Advisor = { id: string; display_name: string };
 type TimelineEntry = {
   source: "lead" | "appointment";
@@ -41,6 +36,9 @@ export default async function LeadDetail({
     actor.role === "ADMIN" ? repo.advisors() : Promise.resolve([]),
   ]);
   if (!lead) notFound();
+  const leadStatus = lead.status as LeadState;
+  const statusOptions = [leadStatus, ...LEAD_STATE_TRANSITIONS[leadStatus]];
+  const statusChangeAvailable = statusOptions.length > 1;
   const conversion = lead.conversion_customer_id
     ? {
         customerId: lead.conversion_customer_id as string,
@@ -84,12 +82,21 @@ export default async function LeadDetail({
         >
           {hidden}
           <h2 className="font-medium">Durum</h2>
-          <select name="status" defaultValue={lead.status}>
-            {states.map((s) => (
+          <select
+            name="status"
+            defaultValue={lead.status}
+            disabled={!statusChangeAvailable}
+          >
+            {statusOptions.map((s) => (
               <option key={s}>{s}</option>
             ))}
           </select>
-          <button className="ml-2 rounded border px-3 py-1">Güncelle</button>
+          <button
+            className="ml-2 rounded border px-3 py-1"
+            disabled={!statusChangeAvailable}
+          >
+            Güncelle
+          </button>
         </form>
         <form action={leadNoteAction} className="space-y-2 rounded border p-4">
           {hidden}

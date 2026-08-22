@@ -14,16 +14,19 @@ into a customer and is never automatic.
 - `customers` are canonical CRM entities; contact identity is held separately
   in `customer_contact_points`.
 - `customer_requests` own independent search and Matching V2 profiles.
-- `lead_conversions` already records one immutable conversion per lead through
-  its unique `lead_id`, customer FK, actor, timestamp, correlation ID and
-  idempotency key. It does not yet reference an initial request or a durable
-  identity-resolution decision.
+- `lead_conversions` records one immutable conversion per lead through its
+  unique `lead_id`, customer FK, actor, timestamp, correlation ID and
+  idempotency key. It also retains the optional initial request, bounded
+  resolution kind, and bounded resolution evidence code. Historic rows retain
+  null Package C provenance fields rather than receiving guessed values.
 
 ## Conversion policy
 
-The command accepts a lead ID, an operation idempotency key, optional explicit
-existing customer ID, and explicitly structured initial-request fields. Actor,
-role, assignment scope and ownership are always server-derived.
+The command accepts a lead ID, an operation idempotency key, an optional
+explicit existing customer ID, and a boolean choice to create an initial
+all-`MISSING` request. Structured request criteria are not accepted because the
+current lead schema does not capture them. Actor, role, assignment scope and
+ownership are always server-derived.
 
 1. Lock the lead and authorize it. ADVISOR requires assigned lead scope.
 2. Return the existing `lead_conversions` outcome for an idempotent retry.
@@ -32,7 +35,8 @@ role, assignment scope and ownership are always server-derived.
 4. If no candidate exists, create one customer and purpose-limited contact
    points from lead intake provenance.
 5. If one candidate exists, link it without overwriting customer/contact data.
-   An ADVISOR also needs existing customer CRM scope.
+   An ADVISOR also needs existing customer CRM scope. Provenance records only
+   the exact verified channel or channels that actually resolved that customer.
 6. If phone and email resolve to different customers, or exact lookup produces
    an ambiguous candidate set, fail with `CUSTOMER_IDENTITY_CONFLICT`; never
    merge or select arbitrarily.
@@ -41,8 +45,9 @@ role, assignment scope and ownership are always server-derived.
    transition the lead to `WON` atomically.
 
 `WON` is the existing terminal lead state and is the successful conversion
-outcome. A pre-existing `WON` lead without conversion provenance is an
-integrity conflict requiring an ADMIN-reviewed repair, never an inferred link.
+outcome. The ordinary status command cannot select it. A pre-existing legacy
+`WON` lead without conversion provenance is an integrity conflict requiring an
+ADMIN-reviewed repair, never an inferred link.
 
 ## Initial customer request
 
@@ -69,14 +74,26 @@ serializes concurrent commands. Failure rolls back every mutable record.
 No email, analytics or match generation occurs in the transaction. A future
 notification must use the existing post-commit outbox boundary.
 
-## Required Package C schema proposal
+## Implemented provenance schema
 
-An additive migration should extend `lead_conversions` with nullable
-`customer_request_id` (FK restrict), a bounded `resolution_kind`, and a safe
-resolution evidence code; it should not alter historical rows. Package C must
-also decide whether a conversion-specific source idempotency key is required in
-addition to the existing unique conversion key. No contact global-uniqueness
-constraint is proposed until canonical/verified contact policy is approved.
+The additive Package C migration extends `lead_conversions` with nullable
+`customer_request_id` (`ON DELETE RESTRICT`), bounded `resolution_kind`, and a
+safe bounded resolution evidence code. Historical rows are not backfilled.
+The existing unique idempotency key remains the conversion retry guard; the
+conversion activity uses a derived source idempotency key only to preserve its
+append-only evidence identity. No contact global-uniqueness constraint was
+introduced.
+
+## Implemented delivery boundary
+
+The existing `/admin/leads/[id]` route renders a bounded conversion outcome
+read model. An eligible unconverted lead can submit a Server Action; the action
+derives the staff principal server-side and delegates to the conversion use
+case. It never accepts actor, advisor, role, or customer-scope assertions from
+the browser. An already converted lead shows its immutable result; `WON`
+without conversion provenance is an admin integrity warning, not an automatic
+repair. The optional existing-customer input is a direct reference only; there
+is no customer directory or fuzzy picker.
 
 ## Appointment interaction
 
@@ -99,10 +116,7 @@ forward-only decision; conversion merely preserves provenance.
 
 ## Open decisions
 
-- Which verified/canonical contact-point state makes an email or phone eligible
-  for deterministic customer lookup.
-- Whether ADVISOR conversion is permitted in V1 or remains ADMIN-only pending
-  an approval policy; Package A preserves the requested scoped design but this
-  role grant needs product confirmation.
+- Whether `VERIFIED` remains the final product definition of an identity
+  eligible for deterministic customer lookup beyond V1.
 - Exact request fields captured at lead intake and eligible for conversion.
 - Whether a future conversion emits an operator notification via outbox.

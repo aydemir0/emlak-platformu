@@ -26,7 +26,7 @@ Leads capture inbound interest; Customers own canonical people/contact records; 
 
 ## Lifecycle contracts and invalid transitions
 
-Implemented Phase 8 lead states are `NEW`, `CONTACTED`, `QUALIFIED`, `VIEWING`, `NEGOTIATION`, `WON`, and `LOST`. The only forward path is `NEW -> CONTACTED -> QUALIFIED -> VIEWING -> NEGOTIATION -> WON`; any non-terminal state may transition to `LOST`. `WON` and `LOST` are terminal and reopen is not implemented. Each transition requires expected version, current state, trusted server authorization, append-only `lead_activities`, audit evidence, and an atomic state/version update. All unlisted/self transitions are invalid.
+Implemented lead states are `NEW`, `CONTACTED`, `QUALIFIED`, `VIEWING`, `NEGOTIATION`, `WON`, and `LOST`. The ordinary forward path is `NEW -> CONTACTED -> QUALIFIED -> VIEWING -> NEGOTIATION`; only the explicit lead-to-customer conversion moves `QUALIFIED`, `VIEWING`, or `NEGOTIATION` to `WON`. The database requires conversion provenance for every `WON` transition, so the ordinary status command cannot manufacture a successful conversion outcome. Any non-terminal state may transition to `LOST`. `WON` and `LOST` are terminal and reopen is not implemented. Each ordinary transition requires expected version, current state, trusted server authorization, append-only `lead_activities`, audit evidence, and an atomic state/version update. All unlisted/self transitions are invalid.
 
 Proposed customer states are `ACTIVE`, `RESTRICTED`, `ARCHIVED`, `ERASED`. Allowed transitions are `ACTIVE -> RESTRICTED`, `ACTIVE -> ARCHIVED`, `RESTRICTED -> ACTIVE`, `RESTRICTED -> ARCHIVED`, `ARCHIVED -> ACTIVE` within retention after uniqueness/privacy checks, and `ACTIVE|RESTRICTED|ARCHIVED -> ERASED` through the irreversible privacy workflow. `ERASED` is terminal. Restriction, archive, restore, merge, export, and erasure require explicit authorization and audit. Restore never silently revives deleted contact points, requests, appointments, assignments, or consent.
 
@@ -36,9 +36,15 @@ Proposed appointment states are `REQUESTED`, `CONFIRMED`, `CANCELLED`, `COMPLETE
 
 Proposed match states are `PROPOSED`, `REVIEWED`, `DISMISSED`, `STALE`. Allowed transitions are `PROPOSED -> REVIEWED|DISMISSED|STALE` and `REVIEWED -> DISMISSED|STALE`. `DISMISSED` and `STALE` are terminal for that immutable computed basis; recomputation under a new rule/input basis creates a separately versioned `PROPOSED` row. All unlisted/self transitions are invalid.
 
-## Future explicit idempotent lead conversion
+## Explicit idempotent lead conversion
 
-Conversion is a named future ADMIN-only application use case, never an update inferred from matching contact text. It is not implemented in Phase 8 and must be re-designed against the implemented terminal `WON` lifecycle before delivery.
+Conversion is an implemented, named application use case for ADMIN and a
+scoped ADVISOR. It locks and authorizes the lead, resolves or creates one
+authorized customer by explicit reference or exact normalized `VERIFIED`
+contacts, optionally creates one all-`MISSING` request, writes bounded
+provenance/activity/audit, and transitions the lead to `WON` in one transaction.
+Retries return the immutable outcome. It never uses fuzzy/name matching, runs
+Matching V2, rewrites appointments, sends email, or calls a provider.
 
 ## Contact normalization and duplicate candidates
 

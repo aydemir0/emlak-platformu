@@ -115,6 +115,33 @@ describe("lead detail appointment sections", () => {
     expect(screen.getByText("Conversion form")).toBeInTheDocument();
   });
 
+  it("shows a distinct unavailable state for a denied lifecycle", async () => {
+    fixture.lead.status = "NEW";
+    render(
+      await LeadDetail({
+        params: Promise.resolve({ id: fixture.lead.id }),
+      }),
+    );
+    expect(
+      screen.getByText(
+        "Bu lead mevcut yaşam döngüsü durumunda müşteriye dönüştürülemez.",
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Conversion form")).not.toBeInTheDocument();
+  });
+
+  it("does not offer WON through the ordinary status form", async () => {
+    fixture.lead.status = "NEGOTIATION";
+    render(
+      await LeadDetail({
+        params: Promise.resolve({ id: fixture.lead.id }),
+      }),
+    );
+    expect(
+      screen.queryByRole("option", { name: "WON" }),
+    ).not.toBeInTheDocument();
+  });
+
   it("shows an immutable conversion outcome instead of another action", async () => {
     fixture.lead.status = "WON";
     fixture.lead.conversion_customer_id =

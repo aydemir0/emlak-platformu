@@ -45,6 +45,7 @@ async function insertLead(
     email: string;
     phone?: string;
     assignedAdvisorId?: string | null;
+    status?: "QUALIFIED" | "VIEWING" | "NEGOTIATION";
   }>,
 ): Promise<string> {
   const id = randomUUID();
@@ -52,7 +53,7 @@ async function insertLead(
   await pool.query(
     `insert into public.leads(
       id,submission_id,status,source,name,email,phone,assigned_advisor_id,idempotency_key
-    ) values($1,$2,'NEGOTIATION','integration','Conversion fixture',$3,$4,$5,$6)`,
+    ) values($1,$2,$7,'integration','Conversion fixture',$3,$4,$5,$6)`,
     [
       id,
       randomUUID(),
@@ -60,6 +61,7 @@ async function insertLead(
       input.phone ?? null,
       input.assignedAdvisorId ?? null,
       randomUUID(),
+      input.status ?? "NEGOTIATION",
     ],
   );
   return id;
@@ -157,16 +159,20 @@ describe("Postgres transactional lead conversion", () => {
       email: "new-conversion@example.test",
       phone: "+905551234567",
     });
+    const command = admin();
     const result = await convertLeadToCustomer(
       new PostgresLeadConversionUnitOfWork(pool),
-      admin(),
+      command,
       { leadId, createInitialRequest: true },
     );
     createdCustomerIds.push(result.customerId);
     const row = await pool.query(
       `select l.status,lc.customer_request_id,lc.resolution_kind,lc.resolution_evidence_code,
+        lc.idempotency_key,lc.correlation_id,
         (select count(*)::int from public.customer_contact_points cp where cp.customer_id=lc.customer_id) contacts,
+        (select count(*)::int from public.customer_contact_points cp where cp.customer_id=lc.customer_id and cp.verification_status='UNVERIFIED') unverified_contacts,
         (select count(*)::int from public.lead_activities la where la.lead_id=lc.lead_id and la.activity_type='CONVERSION_RECORDED') activities,
+        (select count(*)::int from public.audit_logs al where al.target_id=lc.lead_id and al.action='lead.converted' and al.outcome='succeeded') audits,
         (select matching_location_state||matching_budget_state||matching_property_type_state||matching_rooms_state||matching_net_area_state||matching_features_state from public.customer_requests where id=lc.customer_request_id) request_states
        from public.leads l join public.lead_conversions lc on lc.lead_id=l.id where l.id=$1`,
       [leadId],
@@ -175,8 +181,12 @@ describe("Postgres transactional lead conversion", () => {
       status: "WON",
       resolution_kind: "CREATED_NEW_CUSTOMER",
       resolution_evidence_code: "EXACT_EMAIL_AND_PHONE",
+      idempotency_key: command.idempotencyKey,
+      correlation_id: command.correlationId,
       contacts: 2,
+      unverified_contacts: 2,
       activities: 1,
+      audits: 1,
       request_states: "MISSINGMISSINGMISSINGMISSINGMISSINGMISSING",
     });
     const retry = await convertLeadToCustomer(
@@ -189,6 +199,25 @@ describe("Postgres transactional lead conversion", () => {
       customerRequestId: result.customerRequestId,
     });
   });
+
+  it.each(["QUALIFIED", "VIEWING", "NEGOTIATION"] as const)(
+    "converts an eligible %s lead to WON",
+    async (status) => {
+      const leadId = await insertLead({
+        email: `${status.toLowerCase()}-conversion@example.test`,
+        status,
+      });
+      const result = await convertLeadToCustomer(
+        new PostgresLeadConversionUnitOfWork(pool),
+        admin(),
+        { leadId, createInitialRequest: false },
+      );
+      createdCustomerIds.push(result.customerId);
+      await expect(
+        pool.query("select status from public.leads where id=$1", [leadId]),
+      ).resolves.toHaveProperty("rows.0.status", "WON");
+    },
+  );
 
   it("links an explicit customer only when it is in the advisor CRM scope", async () => {
     const customerId = await insertCustomer({ advisorId });
@@ -206,6 +235,56 @@ describe("Postgres transactional lead conversion", () => {
       resolutionKind: "LINKED_EXPLICIT_CUSTOMER",
       customerRequestId: null,
     });
+  });
+
+  it("links one exact VERIFIED identity and records only the matched channel", async () => {
+    const customerId = await insertCustomer({
+      email: "verified-identity@example.test",
+    });
+    const leadId = await insertLead({
+      email: "VERIFIED-IDENTITY@example.test",
+      phone: "+905552222222",
+    });
+    const result = await convertLeadToCustomer(
+      new PostgresLeadConversionUnitOfWork(pool),
+      admin(),
+      { leadId, createInitialRequest: false },
+    );
+    expect(result).toMatchObject({
+      customerId,
+      createdCustomer: false,
+      resolutionKind: "LINKED_EXACT_IDENTITY",
+    });
+    const persisted = await pool.query(
+      `select resolution_evidence_code
+       from public.lead_conversions where lead_id=$1`,
+      [leadId],
+    );
+    expect(persisted.rows[0]).toEqual({
+      resolution_evidence_code: "EXACT_EMAIL",
+    });
+  });
+
+  it("denies an advisor linking a customer outside their CRM scope", async () => {
+    const customerId = await insertCustomer({});
+    const leadId = await insertLead({
+      email: "advisor-denied@example.test",
+      assignedAdvisorId: advisorId,
+    });
+    await expect(
+      convertLeadToCustomer(
+        new PostgresLeadConversionUnitOfWork(pool),
+        advisor(),
+        { leadId, explicitCustomerId: customerId, createInitialRequest: false },
+      ),
+    ).rejects.toMatchObject({ code: "CUSTOMER_LINK_NOT_AUTHORIZED" });
+    const persisted = await pool.query(
+      `select
+        (select count(*)::int from public.lead_conversions where lead_id=$1) conversions,
+        (select count(*)::int from public.audit_logs where target_id=$1 and action='lead.conversion_denied' and outcome='denied' and reason_code='CUSTOMER_LINK_NOT_AUTHORIZED') denials`,
+      [leadId],
+    );
+    expect(persisted.rows[0]).toEqual({ conversions: 0, denials: 1 });
   });
 
   it("fails closed on ambiguous exact identities without persisting a conversion", async () => {
@@ -258,7 +337,10 @@ describe("Postgres transactional lead conversion", () => {
       email: "rollback-target@example.test",
     });
     const before = await pool.query(
-      "select count(*)::int count from public.customers",
+      `select
+        (select count(*)::int from public.customers) customers,
+        (select count(*)::int from public.customer_requests) requests,
+        (select count(*)::int from public.customer_contact_points) contacts`,
     );
     await expect(
       convertLeadToCustomer(
@@ -270,16 +352,22 @@ describe("Postgres transactional lead conversion", () => {
     const after = await pool.query(
       `select
         (select count(*)::int from public.customers) customers,
+        (select count(*)::int from public.customer_requests) requests,
+        (select count(*)::int from public.customer_contact_points) contacts,
         (select status from public.leads where id=$1) lead_status,
         (select count(*)::int from public.lead_conversions where lead_id=$1) conversions,
-        (select count(*)::int from public.lead_activities where lead_id=$1) activities`,
+        (select count(*)::int from public.lead_activities where lead_id=$1) activities,
+        (select count(*)::int from public.audit_logs where target_id=$1) audits`,
       [targetLeadId],
     );
     expect(after.rows[0]).toEqual({
-      customers: before.rows[0]!.count,
+      customers: before.rows[0]!.customers,
+      requests: before.rows[0]!.requests,
+      contacts: before.rows[0]!.contacts,
       lead_status: "NEGOTIATION",
       conversions: 0,
       activities: 0,
+      audits: 0,
     });
   });
 

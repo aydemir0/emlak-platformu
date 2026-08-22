@@ -31,6 +31,8 @@ const lead: LeadForConversion = {
 class FakeUow implements LeadConversionUnitOfWork {
   calls: string[] = [];
   denials: Record<string, unknown>[] = [];
+  conversionValues:
+    Parameters<LeadConversionTransaction["insertConversion"]>[0] | null = null;
   lead: LeadForConversion | null = lead;
   existing: Awaited<
     ReturnType<LeadConversionTransaction["findExistingConversion"]>
@@ -61,6 +63,7 @@ class FakeUow implements LeadConversionUnitOfWork {
     },
     insertConversion: async (values) => {
       this.calls.push("conversion");
+      this.conversionValues = values;
       return {
         leadId: values.leadId,
         customerId: values.customerId,
@@ -159,6 +162,21 @@ describe("convertLeadToCustomer", () => {
       resolutionKind: "LINKED_EXACT_IDENTITY",
     });
     expect(uow.calls).not.toContain("customer");
+  });
+
+  it("records only the exact contact channels that resolved the customer", async () => {
+    const uow = new FakeUow();
+    uow.candidates = [
+      {
+        customerId: "70000000-0000-4000-8000-000000000002",
+        identity: { channel: "EMAIL", normalizedValue: "ada@example.test" },
+      },
+    ];
+    await convertLeadToCustomer(uow, context, {
+      leadId: lead.id,
+      createInitialRequest: false,
+    });
+    expect(uow.conversionValues?.resolutionEvidenceCode).toBe("EXACT_EMAIL");
   });
 
   it("rejects ambiguous identities without creating any record", async () => {

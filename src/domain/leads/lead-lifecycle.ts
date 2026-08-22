@@ -17,7 +17,7 @@ export const LEAD_STATE_TRANSITIONS: Readonly<
   CONTACTED: ["QUALIFIED", "LOST"],
   QUALIFIED: ["VIEWING", "LOST"],
   VIEWING: ["NEGOTIATION", "LOST"],
-  NEGOTIATION: ["WON", "LOST"],
+  NEGOTIATION: ["LOST"],
   WON: [],
   LOST: [],
 };

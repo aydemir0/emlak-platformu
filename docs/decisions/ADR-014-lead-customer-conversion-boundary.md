@@ -2,7 +2,7 @@
 
 ## Status
 
-Accepted for Phase 11 Package A design — 2026-08-11.
+Accepted and implemented — 2026-08-11.
 
 ## Context
 
@@ -55,3 +55,22 @@ future post-commit effect uses the existing transactional outbox.
 Use expand-first nullable provenance fields and retain all historic conversion
 rows. Forward-disable the command if needed; never delete conversion evidence,
 rewrite lead history, or backfill identity semantics by guesswork.
+
+## Implementation evidence
+
+Package C added only the nullable request reference and bounded provenance
+codes. Package D implements a PostgreSQL transaction that locks the lead,
+performs exact `VERIFIED` contact resolution or an explicit authorized link,
+and writes the customer, optional all-`MISSING` request, conversion, `WON`
+transition, activity, and audit atomically. The lead lock and conversion
+uniqueness serialize concurrent commands; retries return the immutable outcome.
+Exact-identity provenance records the verified channel or channels that
+actually selected the canonical customer, not merely every contact on the lead.
+
+Package E uses the existing lead detail route with a Server Action and a thin
+client form. It has no customer enumeration, no Matching V2 trigger, no
+provider call, and no appointment rewrite. Package F added regression coverage
+that keeps the conversion persistence transition aligned with all three
+eligible states: `QUALIFIED`, `VIEWING`, and `NEGOTIATION`. The database
+requires conversion provenance for every `WON` transition; the ordinary status
+workflow cannot create that outcome.
