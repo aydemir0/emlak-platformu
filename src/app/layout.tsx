@@ -1,7 +1,11 @@
 import type { Metadata } from "next";
+
+import { getServerEnv } from "@/config/env.server.runtime";
+
 import "./globals.css";
 
 export const metadata: Metadata = {
+  metadataBase: new URL(getServerEnv().APP_BASE_URL),
   title: {
     default: "Emlak Platformu",
     template: "%s | Emlak Platformu",

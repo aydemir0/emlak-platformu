@@ -7,7 +7,7 @@ import type {
   PublicLeadTransaction,
   PublicLeadUnitOfWork,
 } from "@/application/leads/create-public-lead";
-import { getLocalDatabasePool } from "@/infrastructure/postgres/pool.server";
+import { getDatabasePool } from "@/infrastructure/postgres/pool.server";
 
 export type LeadRateLimitPolicy = Readonly<{
   maximumAttempts: number;
@@ -209,7 +209,7 @@ class PostgresPublicLeadTransaction implements PublicLeadTransaction {
 
 export class PostgresPublicLeadUnitOfWork implements PublicLeadUnitOfWork {
   constructor(
-    private readonly pool: Pool = getLocalDatabasePool(),
+    private readonly pool: Pool = getDatabasePool(),
     private readonly rateLimitPolicy: LeadRateLimitPolicy = {
       maximumAttempts: 5,
       windowMilliseconds: 15 * 60 * 1_000,

@@ -5,7 +5,7 @@ import type {
   AppointmentTransaction,
   AppointmentUnitOfWork,
 } from "@/application/appointments/appointment-use-cases";
-import { getLocalDatabasePool } from "@/infrastructure/postgres/pool.server";
+import { getDatabasePool } from "@/infrastructure/postgres/pool.server";
 
 export type AppointmentListItem = Readonly<{
   id: string;
@@ -162,7 +162,7 @@ class Tx implements AppointmentTransaction {
   }
 }
 export class PostgresAppointmentUnitOfWork implements AppointmentUnitOfWork {
-  constructor(private readonly p: Pool = getLocalDatabasePool()) {}
+  constructor(private readonly p: Pool = getDatabasePool()) {}
   async transaction<T>(w: (tx: AppointmentTransaction) => Promise<T>) {
     const c = await this.p.connect();
     try {
@@ -194,9 +194,7 @@ export class PostgresAppointmentUnitOfWork implements AppointmentUnitOfWork {
   }
 }
 export class PostgresAppointmentReadRepository {
-  constructor(
-    private readonly p: Pick<Pool, "query"> = getLocalDatabasePool(),
-  ) {}
+  constructor(private readonly p: Pick<Pool, "query"> = getDatabasePool()) {}
   async list(actor: StaffPrincipal, q: Record<string, unknown>) {
     const r = await this.p.query(
       "select a.id,a.lead_id,a.property_id,a.advisor_id,a.status,a.starts_at,a.ends_at,a.scheduled_timezone,a.version::text,l.name lead_name,l.email lead_email,p.title property_title,ad.display_name advisor_name,count(*) over()::text total_count from public.appointments a join public.leads l on l.id=a.lead_id and l.deleted_at is null join public.advisors ad on ad.id=a.advisor_id left join public.properties p on p.id=a.property_id and p.deleted_at is null left join public.advisors mine on mine.user_identity_id=$1 and mine.status='active' and mine.deleted_at is null where a.lead_id is not null and a.deleted_at is null and ($2='ADMIN' or (a.advisor_id=mine.id and l.assigned_advisor_id=mine.id)) and ($3::text is null or a.status=$3) and ($4::uuid is null or a.advisor_id=$4) and ($5::uuid is null or a.property_id=$5) and ($6::uuid is null or a.lead_id=$6) and ($7::timestamptz is null or a.starts_at >= $7) and ($8::timestamptz is null or a.starts_at < $8) and ($9::text is null or ($9='upcoming' and a.starts_at >= now()) or ($9='past' and a.starts_at < now())) order by a.starts_at asc,a.id asc limit $10 offset $11",

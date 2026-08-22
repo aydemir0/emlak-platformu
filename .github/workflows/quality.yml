@@ -8,19 +8,37 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
+  secret-scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+        with:
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@e0c47f4f8be36e29cdc102c57e68cb5cbf0e8d1e # v3.0.0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   quality:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     env:
+      APP_ENV: test
+      APP_BASE_URL: http://127.0.0.1:3000
+      APP_RELEASE: ci-${{ github.sha }}
       NEXT_PUBLIC_SUPABASE_URL: http://127.0.0.1:55321
       NEXT_PUBLIC_SUPABASE_ANON_KEY: public-anon-key-for-ci-validation
       SUPABASE_SERVICE_ROLE_KEY: server-only-key-for-ci-validation
       LEAD_INTAKE_HMAC_SECRET: ci-only-lead-intake-hmac-secret-2026-08-10
       LOCAL_DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:55322/postgres
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: 24
           cache: npm

@@ -20,7 +20,7 @@ import {
   type Preference,
   type PropertyMatchCandidateV2,
 } from "@/domain/matching/matching-engine-v2";
-import { getLocalDatabasePool } from "@/infrastructure/postgres/pool.server";
+import { getDatabasePool } from "@/infrastructure/postgres/pool.server";
 
 type State = "MISSING" | "FLEXIBLE" | "CONSTRAINED";
 const states: readonly State[] = ["MISSING", "FLEXIBLE", "CONSTRAINED"];
@@ -273,7 +273,7 @@ class PostgresMatchingTransaction implements MatchingTransaction {
 }
 
 export class PostgresMatchingUnitOfWork implements MatchingUnitOfWork {
-  constructor(private readonly pool: Pool = getLocalDatabasePool()) {}
+  constructor(private readonly pool: Pool = getDatabasePool()) {}
   async transaction<T>(work: (transaction: MatchingTransaction) => Promise<T>) {
     const client = await this.pool.connect();
     try {
@@ -308,9 +308,7 @@ const componentFor = (code: string) => {
 };
 
 export class PostgresMatchingReadRepository implements MatchingReadRepository {
-  constructor(
-    private readonly pool: Pick<Pool, "query"> = getLocalDatabasePool(),
-  ) {}
+  constructor(private readonly pool: Pick<Pool, "query"> = getDatabasePool()) {}
   async get(
     actor: StaffPrincipal,
     customerRequestId: string,

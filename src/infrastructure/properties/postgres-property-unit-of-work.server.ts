@@ -12,7 +12,7 @@ import type {
   PropertyRecord,
   PropertyState,
 } from "@/domain/properties/property";
-import { getLocalDatabasePool } from "@/infrastructure/postgres/pool.server";
+import { getDatabasePool } from "@/infrastructure/postgres/pool.server";
 
 type PropertyRow = QueryResultRow & {
   id: string;
@@ -385,7 +385,7 @@ class PostgresPropertyTransaction implements PropertyTransaction {
 }
 
 export class PostgresPropertyUnitOfWork implements PropertyUnitOfWork {
-  constructor(private readonly pool: Pool = getLocalDatabasePool()) {}
+  constructor(private readonly pool: Pool = getDatabasePool()) {}
 
   async transaction<T>(
     work: (tx: PropertyTransaction) => Promise<T>,

@@ -112,6 +112,41 @@ feature expansion.
 Each package is independently reviewable. A later package does not weaken an
 earlier release gate, and Package B does not begin as part of this decision.
 
+## Package B implementation record
+
+Package B implements the ADR's baseline and configuration decisions as follows:
+
+- Git enforces LF for text and binary treatment for common media/font formats.
+  The 149 initial formatter failures were CRLF checkout drift; formatter rewrite
+  produced no committed source-content changes, so the dedicated baseline
+  commit contains only `.gitattributes`.
+- `APP_ENV` explicitly selects local, test, preview, or production resource
+  posture. `NODE_ENV` grants no production resource authority.
+- `APP_BASE_URL` is one normalized canonical origin and requires HTTPS in
+  production. It supplies root `metadataBase` and absolute sitemap URLs.
+  `APP_RELEASE` is bounded and explicit in preview/production.
+- Local/test use only guarded loopback `LOCAL_DATABASE_URL` and
+  preview/production use only a non-loopback TLS `DATABASE_URL`. The runtime and
+  every adapter consume one server-only parsed configuration and canonical
+  database pool.
+- Provable cross-environment bindings fail closed: local/test reject remote
+  Supabase and `DATABASE_URL`, preview/production reject loopback Supabase and
+  local DB, test rejects R2, and production requires complete R2 configuration.
+  Supabase proxy/server creation applies the guard before any remote call;
+  browser-safe public parsing remains separate. Remote resource ownership still
+  requires deployment-level verification.
+- CI uses deterministic test-only values, verifies positive and negative
+  production configuration paths without external connections, retains the
+  repository-wide format/type/database/test/build/E2E gates, pins Actions to
+  immutable revisions, cancels superseded runs, and scans history with Gitleaks.
+- Secret-like local/export files are ignored, but ignore rules are not treated
+  as secret scanning. A Gitleaks finding blocks until removed/rotated or a narrow
+  reviewed exclusion is justified.
+
+These controls establish a deterministic build/configuration contract. They do
+not prove provider ownership or authorize a production connection, deployment,
+or remote Supabase operation.
+
 ## Alternatives considered
 
 ### Release using documented provider defaults

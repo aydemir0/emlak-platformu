@@ -6,7 +6,7 @@ import type {
   LeadCrmUnitOfWork,
   LeadRecord,
 } from "@/application/leads/lead-crm-use-cases";
-import { getLocalDatabasePool } from "@/infrastructure/postgres/pool.server";
+import { getDatabasePool } from "@/infrastructure/postgres/pool.server";
 
 class Tx implements LeadCrmTransaction {
   constructor(private readonly c: PoolClient) {}
@@ -111,7 +111,7 @@ class Tx implements LeadCrmTransaction {
   }
 }
 export class PostgresLeadCrmUnitOfWork implements LeadCrmUnitOfWork {
-  constructor(private readonly pool: Pool = getLocalDatabasePool()) {}
+  constructor(private readonly pool: Pool = getDatabasePool()) {}
   async transaction<T>(work: (tx: LeadCrmTransaction) => Promise<T>) {
     const c = await this.pool.connect();
     try {
@@ -153,9 +153,7 @@ export type LeadListQuery = Readonly<{
   offset: number;
 }>;
 export class PostgresLeadCrmReadRepository {
-  constructor(
-    private readonly pool: Pick<Pool, "query"> = getLocalDatabasePool(),
-  ) {}
+  constructor(private readonly pool: Pick<Pool, "query"> = getDatabasePool()) {}
   async list(actor: StaffPrincipal, q: LeadListQuery) {
     const r = await this.pool.query(
       `select l.id,l.status,l.version::text,l.name,l.email,l.phone,l.created_at,l.updated_at,p.title as property_title,p.public_id,a.display_name as advisor_name,count(*) over()::text total_count from public.leads l left join public.properties p on p.id=l.property_id and p.deleted_at is null left join public.advisors a on a.id=l.assigned_advisor_id left join public.advisors mine on mine.user_identity_id=$1 and mine.status='active' and mine.deleted_at is null where l.deleted_at is null and ($2='ADMIN' or l.assigned_advisor_id=mine.id) and ($3::text is null or l.status=$3) and ($4::uuid is null or l.assigned_advisor_id=$4) and ($5::uuid is null or l.property_id=$5) and ($6::timestamptz is null or l.created_at>=$6) and ($7::timestamptz is null or l.created_at<$7) and ($8::text is null or l.name ilike '%'||$8||'%' or l.email ilike '%'||$8||'%' or l.phone ilike '%'||$8||'%') order by l.updated_at desc,l.id desc limit $9 offset $10`,

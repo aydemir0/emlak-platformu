@@ -121,6 +121,10 @@ traffic. Production must not use dummy, test, loopback, or empty fallbacks.
 Secrets remain server-only and are redacted from logs, build output, health
 responses, browser bundles, and error tracking.
 
+The matrix below records the Package A audit baseline. Package B closes the
+configuration gaps as described after the matrix; the original findings remain
+visible so the release evidence shows what changed.
+
 | Variable                                      | Production classification                                                                    | Current state                            | Required release contract                                                                                                         |
 | --------------------------------------------- | -------------------------------------------------------------------------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | `NEXT_PUBLIC_SUPABASE_URL`                    | required non-secret                                                                          | Validated URL                            | HTTPS production Auth URL; environment-scoped.                                                                                    |
@@ -148,6 +152,43 @@ responses, browser bundles, and error tracking.
 Preview environments must use isolated non-production Supabase, R2, email,
 analytics, and telemetry resources. Production configuration must never be
 available to arbitrary preview deployments.
+
+### Package B environment implementation result
+
+- `APP_ENV` is the bounded resource identity `local`, `test`, `preview`, or
+  `production`; omission defaults only to `local` and never derives production
+  authority from `NODE_ENV`.
+- `APP_BASE_URL` is normalized to a credential-free HTTP(S) origin. Local/test
+  default to `http://localhost:3000` and reject non-loopback origins; preview
+  requires an explicit non-loopback origin; production additionally requires
+  HTTPS. Root `metadataBase` and sitemap URLs consume this validated origin.
+- `APP_RELEASE` is a trimmed, non-empty, safe-character identifier of at most
+  128 characters. Local/test default to their environment name; preview and
+  production require an explicit release value.
+- Local/test reject `DATABASE_URL` and select the loopback port-55322
+  `LOCAL_DATABASE_URL`. Preview/production reject `LOCAL_DATABASE_URL` and
+  require an explicit non-loopback, non-placeholder PostgreSQL host and exactly
+  one `sslmode` set to `require`, `verify-ca`, or `verify-full`. Loopback
+  normalization covers trailing-dot localhost, IPv4 `127.0.0.0/8`, and
+  IPv4-mapped IPv6 forms.
+- The selected connection is exposed internally as one canonical
+  `DATABASE_URL`; `getDatabasePool()` is the only default PostgreSQL pool
+  boundary. Parsing and pool construction do not open a connection during
+  build.
+- Local/test require loopback Supabase. Preview/production reject loopback
+  Supabase. Test rejects R2 bindings; production requires the complete R2
+  group. Remote preview-versus-production ownership cannot be inferred from a
+  URL and remains a deployment-binding approval check.
+- `env.server.runtime.ts` is the sole `process.env` reader for server-side
+  resource identity and privileged runtime configuration and retains the
+  `server-only` boundary. Supabase proxy/server clients use its lightweight
+  guarded public subset before any remote call; only the browser client uses
+  browser-safe public parsing. Validation errors use variable-level messages
+  and do not echo database credentials.
+- CI sets `APP_ENV=test`, a loopback application origin, the immutable GitHub
+  SHA as `APP_RELEASE`, local Supabase/PostgreSQL values, and non-secret test
+  placeholders. Production contract failures are exercised by unit tests; CI
+  needs no production DB or provider credentials.
 
 ## Database and migration audit
 
@@ -468,6 +509,32 @@ CI hardening also needs action SHA pinning or an approved update policy,
 concurrency cancellation for superseded PR runs, secret scanning, explicit Node
 and Supabase version ownership, and retained failure artifacts where useful.
 
+Package B implemented the baseline controls without changing the permanent
+repository-wide gate:
+
+- the initial 149 Prettier failures in the configured repository scope were
+  confirmed as working-tree CRLF drift; rewriting that scope produced zero
+  tracked content changes;
+  `.gitattributes` now requires LF and explicitly marks common media/font files
+  binary;
+- checkout `v4.3.1`, setup-node `v4.4.0`, and Gitleaks Action `v3.0.0` are
+  pinned to reviewed immutable commit SHAs with version comments;
+- concurrency cancels superseded runs per workflow and pull request/ref;
+- Gitleaks scans full Git history in a separate read-only job. A finding blocks
+  CI; any false-positive exclusion requires a reviewed narrow rationale. The
+  repository owner reviews action updates monthly and before a release
+  candidate;
+- `.gitignore` covers local env files, production env exports, private-key
+  containers, common credential JSON exports, and secret directories;
+- generated database types, migrations, lockfile, excluded governance/legacy
+  documents, and ignored build artifacts remain outside the formatting policy;
+  the three Phase 12 release-readiness documents are explicitly enforced, and
+  the existing generated-type drift gate remains unchanged.
+
+If repository ownership moves to an organization, Gitleaks licensing and token
+permissions must be validated before that move; the scan must not be silently
+disabled. Failure-artifact retention remains a later CI operations enhancement.
+
 ## Test and release-smoke strategy
 
 Current E2E contains five foundation checks: root rendering, security header,
@@ -597,9 +664,9 @@ evidence. Production deployment always requires explicit human approval.
 
 - **Package A — complete with this commit:** system audit, requirements,
   ADR-015, and implementation plan only.
-- **Package B — CI/baseline hygiene and configuration hardening:** LF contract,
-  green cross-platform format gate, production env/database/origin/release
-  validation, CI supply-chain/concurrency/secret checks.
+- **Package B — complete on this branch:** LF contract, green repository format
+  gate, production env/database/origin/release validation, CI immutable action
+  pins/concurrency/Gitleaks, and safe test/build placeholders.
 - **Package C — security, observability, and health/readiness:** request context,
   CSP/HSTS/robots, safe errors/logging, production health, abuse quotas, and
   provider-neutral job visibility.

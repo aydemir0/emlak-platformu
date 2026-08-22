@@ -1,12 +1,12 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-import { getPublicEnv } from "@/config/env.client";
+import { getServerPublicEnv } from "@/config/env.server.runtime";
 import type { Database } from "@/types/database.generated";
 
 export async function refreshStaffSession(request: NextRequest) {
   let response = NextResponse.next({ request });
-  const env = getPublicEnv();
+  const env = getServerPublicEnv();
   const client = createServerClient<Database>(
     env.NEXT_PUBLIC_SUPABASE_URL,
     env.NEXT_PUBLIC_SUPABASE_ANON_KEY,

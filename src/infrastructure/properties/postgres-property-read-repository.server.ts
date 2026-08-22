@@ -8,13 +8,11 @@ import type {
   PropertyListQuery,
   PropertyReadRepository,
 } from "@/application/properties/property-ports";
-import { getLocalDatabasePool } from "@/infrastructure/postgres/pool.server";
+import { getDatabasePool } from "@/infrastructure/postgres/pool.server";
 import { mapProperty } from "@/infrastructure/properties/postgres-property-unit-of-work.server";
 
 export class PostgresPropertyReadRepository implements PropertyReadRepository {
-  constructor(
-    private readonly pool: Pick<Pool, "query"> = getLocalDatabasePool(),
-  ) {}
+  constructor(private readonly pool: Pick<Pool, "query"> = getDatabasePool()) {}
 
   async list(actor: StaffPrincipal, input: PropertyListQuery) {
     const orderBy = {

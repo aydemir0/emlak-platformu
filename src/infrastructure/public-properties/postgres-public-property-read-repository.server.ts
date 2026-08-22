@@ -18,7 +18,7 @@ import {
   getIndexability,
   type PublicListingType,
 } from "@/domain/public-properties/public-property-seo";
-import { getLocalDatabasePool } from "@/infrastructure/postgres/pool.server";
+import { getDatabasePool } from "@/infrastructure/postgres/pool.server";
 
 const PAGE_SIZE = 24;
 const MAXIMUM_PAGE = 100;
@@ -190,7 +190,7 @@ function hasFilters(query: PublicPropertyListQuery): boolean {
 }
 
 export class PostgresPublicPropertyReadRepository implements PublicPropertyReadRepository {
-  constructor(private readonly database: Queryable = getLocalDatabasePool()) {}
+  constructor(private readonly database: Queryable = getDatabasePool()) {}
 
   async getByRoute(route: string): Promise<PublicRouteResolution> {
     const current = await this.database.query<PublicPropertyRow>(

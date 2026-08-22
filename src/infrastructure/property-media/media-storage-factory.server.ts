@@ -8,7 +8,8 @@ import { R2MediaStorage } from "@/infrastructure/property-media/r2-media-storage
 let localStorage: MediaStorage | undefined;
 
 export function getMediaStorage(): MediaStorage {
-  const config = getServerEnv().R2;
+  const env = getServerEnv();
+  const config = env.R2;
   if (config) {
     return new R2MediaStorage({
       accountId: config.accountId,
@@ -17,7 +18,7 @@ export function getMediaStorage(): MediaStorage {
       bucket: config.bucketName,
     });
   }
-  if (process.env.NODE_ENV === "production") {
+  if (env.APP_ENV === "production") {
     throw new Error("MEDIA_STORAGE_UNAVAILABLE");
   }
   localStorage ??= new DeterministicMediaStorage();

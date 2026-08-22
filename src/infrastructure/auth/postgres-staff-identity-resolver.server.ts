@@ -1,11 +1,11 @@
 import "server-only";
 
 import type { StaffIdentityResolver } from "@/application/auth/authenticate-staff-session";
-import { getLocalDatabasePool } from "@/infrastructure/postgres/pool.server";
+import { getDatabasePool } from "@/infrastructure/postgres/pool.server";
 
 export class PostgresStaffIdentityResolver implements StaffIdentityResolver {
   async findActiveStaff(authUserId: string) {
-    const result = await getLocalDatabasePool().query<{
+    const result = await getDatabasePool().query<{
       identity_id: string;
       role: "ADMIN" | "ADVISOR";
       role_count: string;

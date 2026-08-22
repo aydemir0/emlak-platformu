@@ -1,12 +1,10 @@
 import "server-only";
 import type { Pool } from "pg";
 import type { AppointmentReminderWorkerRepository } from "@/application/appointments/appointment-reminder-outbox";
-import { getLocalDatabasePool } from "@/infrastructure/postgres/pool.server";
+import { getDatabasePool } from "@/infrastructure/postgres/pool.server";
 
 export class PostgresAppointmentReminderWorkerRepository implements AppointmentReminderWorkerRepository {
-  constructor(
-    private readonly pool: Pick<Pool, "query"> = getLocalDatabasePool(),
-  ) {}
+  constructor(private readonly pool: Pick<Pool, "query"> = getDatabasePool()) {}
   async claim(workerId: string, limit: number, leaseMs: number) {
     const result = await this.pool.query(
       "with candidates as (select id from public.outbox_messages where event_name='appointment.reminder_requested.v1' and ((status='PENDING' and next_attempt_at <= now()) or (status='PROCESSING' and lease_expires_at <= now())) order by next_attempt_at,created_at,id for update skip locked limit $1) update public.outbox_messages message set status='PROCESSING',attempt_count=message.attempt_count+1,lease_owner=$2,lease_expires_at=now()+($3::bigint * interval '1 millisecond'),last_attempt_at=now(),last_error_code=null from candidates where message.id=candidates.id returning message.id,message.payload,message.correlation_id,message.idempotency_key,message.attempt_count",

@@ -2,6 +2,10 @@ import { describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
+vi.mock("@/config/env.server.runtime", () => ({
+  getServerEnv: () => ({ APP_BASE_URL: "https://emlak.example.test" }),
+}));
+
 const { listSitemapEntries } = vi.hoisted(() => ({
   listSitemapEntries: vi.fn(),
 }));
@@ -37,7 +41,10 @@ describe("public property sitemap", () => {
     const entries = await sitemap();
 
     expect(entries).toEqual([
-      expect.objectContaining({ url: canonicalUrl, lastModified }),
+      expect.objectContaining({
+        url: `https://emlak.example.test${canonicalUrl}`,
+        lastModified,
+      }),
     ]);
     expect(entries.map((entry) => entry.url)).not.toContain(oldUrl);
   });

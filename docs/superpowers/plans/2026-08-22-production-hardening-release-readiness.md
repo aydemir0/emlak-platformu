@@ -38,7 +38,7 @@ pgTAP, Playwright, GitHub Actions.
 
 ## Package B: Baseline, configuration, and CI foundations
 
-### Task B1: Establish a cross-platform text-format contract
+### Task B1: Establish a cross-platform text-format contract — complete
 
 **Files:**
 
@@ -57,17 +57,22 @@ pgTAP, Playwright, GitHub Actions.
    and exclude unrelated formatting changes from this commit.
 4. Run `npm run format:check`, `git diff --check`, typecheck, and tests affected
    by any semantic formatting correction.
-5. Commit: `chore: establish cross-platform text formatting baseline`.
+5. Commit: `chore: normalize repository formatting baseline`.
 
-### Task B2: Separate local and production server configuration
+**Result:** `npm run format:check` initially identified 149 files. All were
+working-tree CRLF drift against LF index content; the formatter produced no
+tracked content delta. Commit `dc981e1` adds only `.gitattributes`, preserves
+binary files, and restores the repository-wide gate without source or generated
+file rewrites.
+
+### Task B2: Separate local and production server configuration — complete
 
 **Files:**
 
 - Modify: `src/config/env.server.ts`
 - Modify: `src/infrastructure/postgres/pool.server.ts`
 - Modify: `.env.example`
-- Test: `src/config/env.server.test.ts`
-- Test: PostgreSQL pool configuration unit tests next to the pool module
+- Test: `src/config/env.unit.test.ts`
 
 **Interfaces:**
 
@@ -88,13 +93,20 @@ pgTAP, Playwright, GitHub Actions.
 4. Run focused tests, `npm run typecheck`, `npm run test:types`, and `npm run lint`.
 5. Commit: `fix: support validated production server configuration`.
 
-### Task B3: Harden the Quality workflow and release identity
+**Result:** 33 focused parser cases prove valid local/test/preview/production,
+safe local/test defaults, canonical origin/release identity, environment-specific
+database selection, TLS/placeholder/loopback rejection, R2/Supabase identity
+guards, and credential-safe errors. The pool is a trivial consumer of the
+tested selected `DATABASE_URL`, so no duplicate implementation-structure test
+was added.
+
+### Task B3: Harden the Quality workflow and release identity — complete
 
 **Files:**
 
 - Modify: `.github/workflows/quality.yml`
-- Create: `.github/dependabot.yml` if dependency update ownership is approved
-- Create: `docs/operations/release-candidate-checklist.md`
+- Modify: `.gitignore`
+- Update: the three Phase 12 requirements/decision/plan records
 
 **Steps:**
 
@@ -105,10 +117,18 @@ pgTAP, Playwright, GitHub Actions.
 3. Add a secret-scanning gate with documented false-positive review ownership.
 4. Preserve the repository-wide format, audit, Supabase reset/pgTAP/type-drift,
    lint, type, unit, build, and Playwright gates.
-5. Record candidate SHA, environment, migration set, provider dependencies,
-   approvers, and rollback owner in the checklist.
-6. Validate the workflow on a pull request without deploying.
-7. Commit: `ci: harden quality and release identity gates`.
+5. Record the implemented contract and remaining deployment-owner decisions in
+   the Phase 12 documents.
+6. Validate workflow syntax locally and obtain the real workflow result only
+   after a separately approved push/PR; Package B does not push.
+7. Commit with Package B configuration: `feat: harden production environment
+configuration`.
+
+**Result:** checkout/setup-node/Gitleaks use reviewed immutable release SHAs,
+superseded runs are cancelled, the full-history secret scan is separate from
+the unchanged Quality job, and CI uses only test identity/local resources.
+Dependabot and the operations release checklist remain later owner/runbook work;
+no update authority or deployment workflow was invented.
 
 **Package B review gate:** Confirm LF behavior on Windows and Linux, production
 configuration fail-fast tests, exact Quality workflow results, and no provider

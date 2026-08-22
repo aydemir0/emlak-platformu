@@ -15,7 +15,7 @@ import type {
   MediaWorkerRepository,
   ProcessingClaim,
 } from "@/application/property-media/media-worker-ports";
-import { getLocalDatabasePool } from "@/infrastructure/postgres/pool.server";
+import { getDatabasePool } from "@/infrastructure/postgres/pool.server";
 
 type SessionRow = QueryResultRow & {
   id: string;
@@ -384,7 +384,7 @@ class PostgresMediaTransaction implements MediaTransaction {
 }
 
 export class PostgresMediaUnitOfWork implements MediaUnitOfWork {
-  constructor(private readonly pool: Pool = getLocalDatabasePool()) {}
+  constructor(private readonly pool: Pool = getDatabasePool()) {}
   async transaction<T>(work: (tx: MediaTransaction) => Promise<T>): Promise<T> {
     const client = await this.pool.connect();
     try {
@@ -422,7 +422,7 @@ export class PostgresMediaUnitOfWork implements MediaUnitOfWork {
 }
 
 export class PostgresMediaWorkerRepository implements MediaWorkerRepository {
-  constructor(private readonly pool: Pool = getLocalDatabasePool()) {}
+  constructor(private readonly pool: Pool = getDatabasePool()) {}
 
   async claimNext(input: Parameters<MediaWorkerRepository["claimNext"]>[0]) {
     const client = await this.pool.connect();

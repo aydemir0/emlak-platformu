@@ -7,12 +7,10 @@ import type {
   LeadOutboxFailure,
   LeadOutboxWorkerRepository,
 } from "@/application/leads/lead-outbox-worker";
-import { getLocalDatabasePool } from "@/infrastructure/postgres/pool.server";
+import { getDatabasePool } from "@/infrastructure/postgres/pool.server";
 
 export class PostgresLeadOutboxWorkerRepository implements LeadOutboxWorkerRepository {
-  constructor(
-    private readonly pool: Pick<Pool, "query"> = getLocalDatabasePool(),
-  ) {}
+  constructor(private readonly pool: Pick<Pool, "query"> = getDatabasePool()) {}
 
   async claim(workerId: string, limit: number, leaseMs: number) {
     const result = await this.pool.query(
