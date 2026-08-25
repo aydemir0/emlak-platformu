@@ -24,6 +24,11 @@ const formSchema = z
         typeof value === "string" && value.trim() === "" ? undefined : value,
       z.string().trim().min(1).max(4_096).optional(),
     ),
+    companyWebsite: z.preprocess(
+      (value) =>
+        typeof value === "string" && value.trim() === "" ? undefined : value,
+      z.string().trim().min(1).max(160).optional(),
+    ),
   })
   .strict()
   .superRefine((value, context) => {

@@ -316,6 +316,101 @@ has a manual runbook. Recipient semantics for lead and appointment
 notifications are an explicit product/operations decision; they must not be
 guessed from PII.
 
+## Package C implementation record (local evidence, 2026-08-23)
+
+The Package A sections above are the audited baseline and remain part of the
+release record. Package C implements the following local controls; it does not
+turn an unconfigured provider, absent scheduler, or unavailable environment
+gate into release evidence.
+
+### Browser, crawl, and request/error boundaries
+
+- Document responses use a per-request nonce CSP. `script-src` has no
+  `'unsafe-inline'` or wildcard, and `connect-src` is `'self'` plus only the
+  validated virtual-hosted R2 presigned-upload origin when the complete R2
+  identity is configured. The same canonical addressing contract drives the
+  presigner and CSP; malformed account or bucket labels produce no origin.
+- The remaining sources are deliberately narrow: same-origin images, forms,
+  and connections; `frame-src 'none'`; `frame-ancestors 'none'`; and only the
+  framework-required `style-src 'unsafe-inline'` exception. No unreviewed
+  analytics, telemetry, font, CAPTCHA, or delivery origin is allowed.
+- HSTS is `max-age=63072000` only under `APP_ENV=production`. It has neither
+  `includeSubDomains` nor `preload` because subdomain ownership is not proven.
+  Confirmed production HTTPS/header delivery is still a release-owner check.
+- Admin metadata is `noindex,nofollow`; `robots.ts` excludes the bare and
+  descendant private admin, auth, CRM, customer, lead, and customer-request
+  paths. Robots is defense in depth, not authorization.
+- `createRequestContext` admits only bounded canonical correlation IDs and
+  generates a UUID for missing or invalid input. Delivery, Server Action, media,
+  health, and safe diagnostic paths propagate this ID instead of consuming raw
+  request headers independently.
+- Structured logging derives canonical `APP_ENV`/`APP_RELEASE`, applies
+  fail-closed recursive redaction, and retains only finite allowlisted
+  operational values. Safe diagnostics contain an error code, operation, and
+  correlation ID only; raw errors, stacks, provider/database responses, free
+  text, and PII are excluded. The provider-neutral telemetry boundary is a
+  production-conditional no-op unless an approved transport is injected; Sentry
+  or another provider is not wired.
+
+### Health and bounded worker behavior
+
+- `GET /api/health` is dependency-free public liveness: HTTP 200 with the
+  minimal `status: ok` envelope, `no-store`, and canonical request headers. It
+  does not call PostgreSQL, R2, Supabase, or a provider.
+- `GET /api/readiness` performs only parsed critical-config validation and one
+  read-only `SELECT 1` through the canonical pool. Concurrent callers coalesce
+  onto one probe; each response has a one-second bound and returns a minimal
+  200/503 envelope without configuration or database detail. R2 and async
+  providers are deliberately not readiness-critical.
+- Lead outbox, appointment reminders, media processing, and reconciliation
+  emit aggregate PII-free run summaries: bounded counts, safe failure category,
+  stale-lease recovery, and no payload, object key, recipient, or provider
+  response. Retry attempts are bounded; terminal retryable failures use
+  deterministic poison/dead-letter outcomes, and guarded transitions fail on a
+  lost or expired lease rather than reporting an unpersisted success.
+- This is application-level visibility only. Authenticated scheduler entrypoints,
+  runtime reporter injection, provider adapters, external metrics/dashboards,
+  alert ownership, and worker runbooks remain Package E work.
+
+### Intake, media, matching, and direct identifiers
+
+- Public lead intake has a bounded honeypot and a 64 KiB Server Action body
+  limit. Challenge outcomes are truthful: unconfigured verification is
+  `UNAVAILABLE`; preview/production then persist no lead and return the safe
+  unavailable state. Spoofable forwarding headers are ignored until a trusted
+  proxy contract exists. Existing durable database idempotency, duplicate
+  handling, and rate acquisition remain in place.
+- The durable rate key remains intentionally conservative. Provider selection,
+  trusted ingress/client-address rules, query/index measurement, and an
+  approved enabled-production intake policy are deferred; no in-memory or
+  guessed substitute rate limiter was introduced.
+- Media metadata/finalize bodies are bounded at 16 KiB and media command bodies
+  at 128 KiB before authentication or schema work. Existing object, MIME,
+  decode, dimension, pixel, key, batch, and re-encoded-output bounds remain;
+  per-variant and aggregate encoded output are capped by the 15 MiB recipe
+  budget. Persisted actor, property, and active-session quotas remain deferred
+  because the current model has no reviewed bounded count or policy.
+- Matching authenticates before configuration/database construction and enforces
+  the application-owned candidate maximum of 500. A persisted rapid-execution
+  cooldown/window is not implemented without an approved durable policy.
+- Direct-ID delivery normalizes missing and unauthorized lead, property, media,
+  and applicable mutation responses while preserving typed lifecycle, conflict,
+  validation, MFA, and genuine role failures internally and where appropriate
+  outwardly. Database-backed verification remains environment-blocked where the
+  local PostgreSQL/Supabase service is unavailable.
+
+### Package C verification and unchanged release conditions
+
+Focused C1–C4 regressions, CSP/browser checks, unit/type/lint/format checks,
+and `git diff --check` have local passing evidence in their task reports.
+Package C does **not** mark its integration/build/npm-audit gates as passing:
+the final C4 integration and sitemap-prerender build require unavailable local
+PostgreSQL/Supabase, and the dependency audit registry endpoint was unavailable
+under the no-remote boundary. Package D retains measured database/index and
+additional reliability work; Package E retains media delivery, scheduler,
+provider, telemetry, operations, and smoke wiring. These conditions continue to
+block release until their respective evidence exists.
+
 ## Media and R2 production requirements
 
 Current controls include a 15 MiB limit, JPEG/PNG/WebP allowlist, exact declared

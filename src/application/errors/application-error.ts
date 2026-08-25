@@ -1,3 +1,5 @@
+import { isSafeCorrelationId } from "@/lib/request-context";
+
 export type ApplicationErrorCode =
   | "UNAUTHENTICATED"
   | "MFA_REQUIRED"
@@ -17,6 +19,7 @@ export type ApplicationErrorCode =
   | "MEDIA_INVALID_TRANSITION"
   | "MEDIA_CONFLICT"
   | "MEDIA_VALIDATION_FAILED"
+  | "MEDIA_REQUEST_TOO_LARGE"
   | "MEDIA_UPLOAD_EXPIRED"
   | "MEDIA_PROCESSING_FAILED"
   | "MEDIA_STORAGE_UNAVAILABLE"
@@ -62,10 +65,69 @@ export class ApplicationError extends Error {
   }
 }
 
-export function toPublicError(error: ApplicationError) {
+export type ErrorDiagnostic = Readonly<{
+  code: ApplicationErrorCode;
+  correlationId?: string;
+  operation?: string;
+}>;
+
+type ErrorDiagnosticContext = Readonly<{
+  correlationId?: string;
+  operation?: string;
+}>;
+
+const safeOperation = /^[a-z][a-z0-9._-]{0,127}$/;
+const reportableOperationalCodes = new Set<ApplicationErrorCode>([
+  "DEPENDENCY_UNAVAILABLE",
+  "MEDIA_PROCESSING_FAILED",
+  "MEDIA_STORAGE_UNAVAILABLE",
+  "LEAD_CONVERSION_FAILED",
+  "MATCHING_PERSISTENCE_FAILED",
+  "INTERNAL",
+]);
+
+export function isReportableOperationalFailure(error: unknown): boolean {
+  return (
+    !(error instanceof ApplicationError) ||
+    reportableOperationalCodes.has(error.code)
+  );
+}
+
+export function toErrorDiagnostic(
+  error: unknown,
+  context: ErrorDiagnosticContext = {},
+): ErrorDiagnostic {
+  const applicationError =
+    error instanceof ApplicationError && error.code !== "INTERNAL"
+      ? error
+      : undefined;
+  const correlationId =
+    (isSafeCorrelationId(context.correlationId)
+      ? context.correlationId
+      : undefined) ??
+    (isSafeCorrelationId(applicationError?.correlationId)
+      ? applicationError.correlationId
+      : undefined);
   return {
-    code: error.code,
-    message: error.message,
-    ...(error.correlationId ? { correlationId: error.correlationId } : {}),
+    code: applicationError?.code ?? "INTERNAL",
+    ...(correlationId ? { correlationId } : {}),
+    ...(context.operation && safeOperation.test(context.operation)
+      ? { operation: context.operation }
+      : {}),
+  };
+}
+
+export function toPublicError(error: unknown, correlationId?: string) {
+  const applicationError =
+    error instanceof ApplicationError && error.code !== "INTERNAL"
+      ? error
+      : undefined;
+  const diagnostic = toErrorDiagnostic(error, { correlationId });
+  return {
+    code: diagnostic.code,
+    message: applicationError?.message ?? "Operation could not be completed",
+    ...(diagnostic.correlationId
+      ? { correlationId: diagnostic.correlationId }
+      : {}),
   };
 }

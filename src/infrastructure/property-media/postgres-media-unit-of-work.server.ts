@@ -15,6 +15,7 @@ import type {
   MediaWorkerRepository,
   ProcessingClaim,
 } from "@/application/property-media/media-worker-ports";
+import { WorkerLeaseLostError } from "@/application/observability/worker-run";
 import { getDatabasePool } from "@/infrastructure/postgres/pool.server";
 
 type SessionRow = QueryResultRow & {
@@ -430,7 +431,8 @@ export class PostgresMediaWorkerRepository implements MediaWorkerRepository {
       await client.query("begin");
       const expired = await client.query<ProcessingClaim & QueryResultRow>(
         `select
-        mpa.id as "attemptId",pm.id as "mediaId",pm.property_id as "propertyId",
+        mpa.id as "attemptId",mpa.attempt_number as "attemptNumber",
+        true as "recoveredStaleLease",pm.id as "mediaId",pm.property_id as "propertyId",
         pm.source_version as "sourceVersion",mus.object_key as "sourceObjectKey",
         mus.expected_mime_type as "declaredMimeType",mus.maximum_bytes::int as "maximumBytes",
         mus.uploaded_checksum_sha256 as "uploadedChecksumSha256",
@@ -444,19 +446,46 @@ export class PostgresMediaWorkerRepository implements MediaWorkerRepository {
         [input.workerId, input.now, input.leaseSeconds],
       );
       if (expired.rows[0]) {
-        await client.query(
-          `update public.media_processing_attempts set lease_owner=$2,
-          lease_expires_at=$3::timestamptz+make_interval(secs=>$4::int),heartbeat_at=$3
-          where id=$1`,
+        const expiredClaim = expired.rows[0];
+        const nextAttemptNumber = expiredClaim.attemptNumber + 1;
+        const closed = await client.query(
+          `update public.media_processing_attempts set status='FAILED',lease_owner=null,
+          lease_expires_at=null,heartbeat_at=$2,finished_at=$2,error_code='MEDIA_LEASE_EXPIRED',
+          error_detail=null where id=$1 and status='CLAIMED' and lease_expires_at <= $2`,
+          [expiredClaim.attemptId, input.now],
+        );
+        if (closed.rowCount !== 1)
+          throw new WorkerLeaseLostError(
+            "media.process",
+            expiredClaim.attemptId,
+          );
+        const replacement = await client.query<{ id: string }>(
+          `insert into public.media_processing_attempts
+          (property_media_id,attempt_number,source_version,recipe_version,status,lease_owner,lease_expires_at,
+           heartbeat_at,correlation_id,idempotency_key,started_at,processor_version)
+          values($1::uuid,$2::int,$3::int,$4,'CLAIMED',$5,$6::timestamptz+make_interval(secs=>$7::int),$6,
+            gen_random_uuid(),$1::uuid::text||':'||$3::int::text||':'||$2::int::text,$6,$8) returning id`,
           [
-            expired.rows[0].attemptId,
+            expiredClaim.mediaId,
+            nextAttemptNumber,
+            expiredClaim.sourceVersion,
+            input.recipeVersion,
             input.workerId,
             input.now,
             input.leaseSeconds,
+            input.processorVersion,
           ],
         );
         await client.query("commit");
-        return expired.rows[0];
+        return {
+          ...expiredClaim,
+          attemptId: replacement.rows[0]!.id,
+          attemptNumber: nextAttemptNumber,
+          leaseOwner: input.workerId,
+          leaseExpiresAt: new Date(
+            input.now.getTime() + input.leaseSeconds * 1000,
+          ),
+        };
       }
       const candidate = await client.query<{
         media_id: string;
@@ -504,6 +533,8 @@ export class PostgresMediaWorkerRepository implements MediaWorkerRepository {
       await client.query("commit");
       return {
         attemptId: attempt.rows[0]!.id,
+        attemptNumber: row.attempt_number,
+        recoveredStaleLease: false,
         mediaId: row.media_id,
         propertyId: row.property_id,
         sourceVersion: row.source_version,
@@ -542,7 +573,8 @@ export class PostgresMediaWorkerRepository implements MediaWorkerRepository {
           input.now,
         ],
       );
-      if (guarded.rowCount !== 1) throw new Error("MEDIA_CONFLICT");
+      if (guarded.rowCount !== 1)
+        throw new WorkerLeaseLostError("media.process", input.claim.attemptId);
       await client.query(
         `insert into public.property_media_variants
         (property_media_id,source_version,recipe_version,format,width_px,height_px,byte_size,object_key,checksum_sha256)
@@ -657,7 +689,8 @@ export class PostgresMediaWorkerRepository implements MediaWorkerRepository {
           input.claim.leaseOwner,
         ],
       );
-      if (result.rowCount !== 1) throw new Error("MEDIA_CONFLICT");
+      if (result.rowCount !== 1)
+        throw new WorkerLeaseLostError("media.process", input.claim.attemptId);
       await client.query(
         `update public.property_media set state='FAILED',visibility='PRIVATE',
         current_recipe_version=null,processor_version=$2,failure_code=$3,failure_retryable=$4,

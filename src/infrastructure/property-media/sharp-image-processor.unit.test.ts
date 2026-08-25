@@ -82,6 +82,27 @@ describe("Sharp property image processor", () => {
     ).rejects.toThrow("MEDIA_VALIDATION_FAILED");
   });
 
+  it("rejects encoded output that exceeds the per-variant recipe budget", async () => {
+    const source = await image(20, 20);
+    await expect(
+      new SharpImageProcessor().process(source, "image/jpeg", {
+        ...PROPERTY_V1_RECIPE,
+        maximumVariantBytes: 1,
+      }),
+    ).rejects.toThrow("MEDIA_VALIDATION_FAILED");
+  });
+
+  it("rejects encoded output that exceeds the aggregate recipe budget", async () => {
+    const source = await image(20, 20);
+    await expect(
+      new SharpImageProcessor().process(source, "image/jpeg", {
+        ...PROPERTY_V1_RECIPE,
+        maximumVariantBytes: PROPERTY_V1_RECIPE.maximumBytes,
+        maximumTotalVariantBytes: 1,
+      }),
+    ).rejects.toThrow("MEDIA_VALIDATION_FAILED");
+  });
+
   it("rejects an extreme decoded edge", async () => {
     const extreme = await image(12_001, 1, "png");
     await expect(

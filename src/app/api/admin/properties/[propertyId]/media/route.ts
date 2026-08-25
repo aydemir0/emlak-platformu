@@ -5,12 +5,15 @@ import { reorderPropertyMedia } from "@/application/property-media/reorder-prope
 import { restorePropertyMedia } from "@/application/property-media/restore-property-media";
 import { retryMediaProcessing } from "@/application/property-media/retry-media-processing";
 import {
+  MEDIA_COMMAND_MAX_BYTES,
   mediaCommandContext,
   mediaFailure,
+  readBoundedMediaJson,
 } from "@/features/property-media/media-delivery.server";
 import { requireStaffPrincipal } from "@/infrastructure/auth/require-staff-principal.server";
 import { PostgresMediaReadRepository } from "@/infrastructure/property-media/postgres-media-read-repository.server";
 import { PostgresMediaUnitOfWork } from "@/infrastructure/property-media/postgres-media-unit-of-work.server";
+import { createRequestContext } from "@/lib/request-context";
 
 const paramsSchema = z.object({ propertyId: z.uuid() });
 const identity = {
@@ -63,9 +66,10 @@ const bodySchema = z.discriminatedUnion("command", [
 ]);
 
 export async function GET(
-  _request: Request,
+  request: Request,
   context: { params: Promise<{ propertyId: string }> },
 ) {
+  const requestContext = createRequestContext(request.headers);
   try {
     const { propertyId } = paramsSchema.parse(await context.params);
     const actor = await requireStaffPrincipal();
@@ -81,7 +85,10 @@ export async function GET(
       })),
     });
   } catch (error) {
-    return mediaFailure(error);
+    return mediaFailure(error, {
+      correlationId: requestContext.correlationId,
+      operation: "media.list",
+    });
   }
 }
 
@@ -89,10 +96,17 @@ export async function POST(
   request: Request,
   routeContext: { params: Promise<{ propertyId: string }> },
 ) {
+  const requestContext = createRequestContext(request.headers);
   try {
     const { propertyId } = paramsSchema.parse(await routeContext.params);
-    const body = bodySchema.parse(await request.json());
-    const context = await mediaCommandContext(request, body.idempotencyKey);
+    const body = bodySchema.parse(
+      await readBoundedMediaJson(request, MEDIA_COMMAND_MAX_BYTES),
+    );
+    const context = await mediaCommandContext(
+      request,
+      body.idempotencyKey,
+      requestContext,
+    );
     const uow = new PostgresMediaUnitOfWork();
     if (body.command === "reorder") {
       const result = await reorderPropertyMedia(uow, context, {
@@ -113,6 +127,9 @@ export async function POST(
     }
     return Response.json({ ok: true });
   } catch (error) {
-    return mediaFailure(error);
+    return mediaFailure(error, {
+      correlationId: requestContext.correlationId,
+      operation: "media.command",
+    });
   }
 }

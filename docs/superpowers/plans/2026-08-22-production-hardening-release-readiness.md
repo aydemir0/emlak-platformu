@@ -138,7 +138,17 @@ mutation. Stop for approval before Package C.
 
 ## Package C: Security and observability hardening
 
+**Implementation status (2026-08-23):** Local implementation is complete with
+documented concerns; no Package C commit, deployment, remote mutation, SQL, or
+dependency change was made. The original steps below remain the decision record;
+the result notes distinguish implemented controls from Package D/E deferrals.
+
 ### Task C1: Apply a consistent request, error, and logging boundary
+
+**Result:** Complete locally. Bounded canonical request/correlation IDs,
+canonical `APP_ENV`/`APP_RELEASE`, fail-closed structured redaction, stable safe
+errors, and sanitized runtime diagnostics are implemented. Telemetry remains a
+conditional no-op absent an approved Sentry/provider transport.
 
 **Files:**
 
@@ -162,6 +172,12 @@ mutation. Stop for approval before Package C.
 
 ### Task C2: Harden browser and indexing policy
 
+**Result:** Complete locally. Document CSP uses a per-request nonce with no
+`script-src 'unsafe-inline'`; sources are narrow, including only the exact
+validated virtual-hosted R2 presigned PUT origin when configured. Production-only
+HSTS has no preload or subdomain scope; private robots/admin noindex controls
+are present. Actual external HTTPS/R2 verification remains Package E.
+
 **Files:**
 
 - Modify: `next.config.ts`
@@ -184,6 +200,12 @@ mutation. Stop for approval before Package C.
 
 ### Task C3: Split liveness from dependency readiness
 
+**Result:** Complete locally with operations wiring deferred. Liveness is public
+and dependency-free; readiness is a minimal, coalesced DB-only read probe with
+bounded response time and safe envelopes. Workers emit PII-free aggregate
+summaries and enforce bounded poison/lease behavior, but scheduler/runtime
+reporter, provider, alert, dashboard, and runbook wiring remain Package E.
+
 **Files:**
 
 - Modify: `src/app/api/health/route.ts`
@@ -202,6 +224,14 @@ mutation. Stop for approval before Package C.
 5. Commit: `feat: add dependency-aware production health checks`.
 
 ### Task C4: Bound public intake and upload abuse
+
+**Result:** Complete locally with authorized deferrals. Preview/production lead
+intake fails closed when the challenge is unavailable; honeypot/body limits,
+untrusted forwarding-header handling, durable DB rate control, media body/decode/
+MIME/key/batch/encoded-output controls, authentication-before-matching expense,
+the 500 candidate cap, and safe direct-ID mappings are implemented. Trusted
+proxy/provider wiring, DB rate-query/index measurement, persisted upload quotas,
+and matching cooldown policy remain Package E/D decisions.
 
 **Files:**
 
@@ -222,9 +252,13 @@ mutation. Stop for approval before Package C.
    the approved abuse-risk policy.
 5. Commit: `fix: enforce production intake and upload abuse controls`.
 
-**Package C review gate:** Security tests, CSP browser verification, readiness
-failure behavior, redaction evidence, and abuse limits pass. Any RLS, auth,
-secret, or PII regression blocks progression. Stop for approval before Package D.
+**Package C review gate:** Local security tests, CSP browser verification,
+readiness failure behavior, redaction evidence, and abuse-limit regressions have
+passing task-report evidence. This is not a full release-gate pass: final C4
+DB-backed integration and sitemap-prerender build checks are environment blocked
+without local PostgreSQL/Supabase, and `npm audit` is registry-blocked under the
+no-remote boundary. Any RLS, auth, secret, or PII regression blocks progression.
+Package D/E deferrals remain required; stop for approval before Package D.
 
 ---
 

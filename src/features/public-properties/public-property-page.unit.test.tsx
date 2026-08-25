@@ -55,6 +55,19 @@ describe("public property detail page", () => {
     ).toBeEnabled();
   });
 
+  it("binds the proxied CSP nonce to the dynamic JSON-LD script", () => {
+    const { container } = render(
+      <PublicPropertyDetailView
+        nonce="csp-nonce-for-property-json-ld"
+        property={publicPropertyDetailFixture}
+      />,
+    );
+
+    expect(
+      container.querySelector('script[type="application/ld+json"]'),
+    ).toHaveAttribute("nonce", "csp-nonce-for-property-json-ld");
+  });
+
   it("never copies non-EXACT hidden fields into HTML, metadata, or JSON-LD", () => {
     const sensitiveAddress = "SIZDIRILMAMASI-GEREKEN-ADRES";
     const sensitiveLatitude = 39.925_533;

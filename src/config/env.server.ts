@@ -3,6 +3,9 @@ import { isIP } from "node:net";
 import { z } from "zod";
 
 import { parsePublicEnv } from "@/config/env.client";
+import { MATCHING_CANDIDATE_LIMIT_MAXIMUM } from "@/domain/matching/matching-policy";
+
+export { MATCHING_CANDIDATE_LIMIT_MAXIMUM } from "@/domain/matching/matching-policy";
 
 const serviceRoleSchema = z.string().min(20);
 const leadHmacSecretSchema = z.string().min(32);
@@ -20,11 +23,13 @@ const matchingCandidateLimitSchema = z.coerce
   .number()
   .int()
   .positive()
-  .max(10_000)
+  .max(MATCHING_CANDIDATE_LIMIT_MAXIMUM)
   .default(MATCHING_CANDIDATE_LIMIT_DEFAULT);
 
 export type AppEnvironment = z.infer<typeof appEnvironmentSchema>;
+export type RuntimeIdentity = ReturnType<typeof parseRuntimeIdentity>;
 export type ServerPublicEnv = ReturnType<typeof parseServerPublicEnv>;
+export type ServerReadinessEnv = ReturnType<typeof parseServerReadinessEnv>;
 export type ServerEnv = ReturnType<typeof parseServerEnv>;
 
 const LOOPBACK_HOSTS = new Set(["127.0.0.1", "localhost", "::1"]);
@@ -235,7 +240,19 @@ export function parseServerPublicEnv(
   return { APP_ENV: appEnvironment, ...publicEnv };
 }
 
-export function parseServerEnv(values: Record<string, string | undefined>) {
+export function parseRuntimeIdentity(
+  values: Record<string, string | undefined>,
+) {
+  const appEnvironment = appEnvironmentSchema.parse(values.APP_ENV);
+  return {
+    APP_ENV: appEnvironment,
+    APP_RELEASE: parseAppRelease(values.APP_RELEASE, appEnvironment),
+  };
+}
+
+export function parseServerReadinessEnv(
+  values: Record<string, string | undefined>,
+) {
   const serverPublicEnv = parseServerPublicEnv(values);
   const appEnvironment = serverPublicEnv.APP_ENV;
 
@@ -267,6 +284,14 @@ export function parseServerEnv(values: Record<string, string | undefined>) {
     MATCHING_CANDIDATE_LIMIT: matchingCandidateLimitSchema.parse(
       values.MATCHING_CANDIDATE_LIMIT,
     ),
-    R2: parseR2Configuration(values, appEnvironment),
+  };
+}
+
+export function parseServerEnv(values: Record<string, string | undefined>) {
+  const readinessEnv = parseServerReadinessEnv(values);
+
+  return {
+    ...readinessEnv,
+    R2: parseR2Configuration(values, readinessEnv.APP_ENV),
   };
 }

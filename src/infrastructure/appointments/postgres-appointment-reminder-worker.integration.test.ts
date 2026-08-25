@@ -49,12 +49,52 @@ describe("Postgres appointment reminder worker", () => {
       first.claim("one", 1, 60_000),
       second.claim("two", 1, 60_000),
     ]);
-    expect([...a, ...b].filter((item) => item.id === id)).toHaveLength(1);
+    expect([...a, ...b].filter((item) => item.id === id)).toEqual([
+      expect.objectContaining({ recoveredStaleLease: false }),
+    ]);
     await pool.query(
       "update public.outbox_messages set lease_expires_at=now()-interval '1 second',next_attempt_at='-infinity'::timestamptz where id=$1",
       [id],
     );
     const reclaimed = await second.claim("two", 1, 60_000);
-    expect(reclaimed[0]).toMatchObject({ id, attemptCount: 2 });
+    expect(reclaimed[0]).toMatchObject({
+      id,
+      attemptCount: 2,
+      recoveredStaleLease: true,
+    });
+  });
+
+  it("rejects a guarded transition after another worker owns the lease", async () => {
+    const id = await message();
+    const repository = new PostgresAppointmentReminderWorkerRepository(pool);
+    expect((await repository.claim("worker-a", 1, 60_000))[0]?.id).toBe(id);
+
+    await expect(repository.markProcessed(id, "worker-b")).rejects.toThrow(
+      "WORKER_LEASE_LOST",
+    );
+    await expect(
+      repository.markFailed(
+        id,
+        "worker-b",
+        { code: "TEMP_DOWN", retryable: true },
+        10_000,
+      ),
+    ).rejects.toThrow("WORKER_LEASE_LOST");
+    await pool.query(
+      "update public.outbox_messages set lease_expires_at=now()-interval '1 second' where id=$1",
+      [id],
+    );
+    await expect(repository.markProcessed(id, "worker-a")).rejects.toThrow(
+      "WORKER_LEASE_LOST",
+    );
+
+    const state = await pool.query(
+      "select status,lease_owner from public.outbox_messages where id=$1",
+      [id],
+    );
+    expect(state.rows[0]).toEqual({
+      status: "PROCESSING",
+      lease_owner: "worker-a",
+    });
   });
 });

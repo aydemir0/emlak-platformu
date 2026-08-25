@@ -9,10 +9,18 @@ export type LeadOutboxConsumers = Readonly<{
   analytics: (message: LeadOutboxMessage) => Promise<void>;
 }>;
 const forbidden = /(email|phone|name|message|address|raw.*lead|contact)/i;
+
+export class LeadOutboxPiiError extends Error {
+  constructor() {
+    super("LEAD_OUTBOX_PII");
+    this.name = "LeadOutboxPiiError";
+  }
+}
+
 function assertPayloadValue(value: unknown, key?: string): void {
-  if (key && forbidden.test(key)) throw new Error("LEAD_OUTBOX_PII");
+  if (key && forbidden.test(key)) throw new LeadOutboxPiiError();
   if (typeof value === "string" && /@|\+\d{6,}/.test(value))
-    throw new Error("LEAD_OUTBOX_PII");
+    throw new LeadOutboxPiiError();
   if (Array.isArray(value)) {
     value.forEach((item) => assertPayloadValue(item));
     return;
@@ -24,7 +32,7 @@ function assertPayloadValue(value: unknown, key?: string): void {
 }
 function assertPayload(payload: Record<string, unknown>) {
   for (const [key, value] of Object.entries(payload)) {
-    if (forbidden.test(key)) throw new Error("LEAD_OUTBOX_PII");
+    if (forbidden.test(key)) throw new LeadOutboxPiiError();
     assertPayloadValue(value, key);
   }
 }

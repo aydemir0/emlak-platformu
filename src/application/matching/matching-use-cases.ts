@@ -8,6 +8,7 @@ import {
   type MatchingProfileV2,
   type PropertyMatchCandidateV2,
 } from "@/domain/matching/matching-engine-v2";
+import { MATCHING_CANDIDATE_LIMIT_MAXIMUM } from "@/domain/matching/matching-policy";
 
 export type MatchingCommandContext = Readonly<{
   actor: StaffPrincipal;
@@ -96,7 +97,8 @@ export async function refreshCustomerRequestMatches(
 ): Promise<readonly MatchingResultSummary[]> {
   if (
     !Number.isSafeInteger(input.candidateLimit) ||
-    input.candidateLimit <= 0
+    input.candidateLimit <= 0 ||
+    input.candidateLimit > MATCHING_CANDIDATE_LIMIT_MAXIMUM
   ) {
     throw new ApplicationError(
       "MATCHING_INPUT_INVALID",

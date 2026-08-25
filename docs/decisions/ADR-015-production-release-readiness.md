@@ -147,6 +147,42 @@ These controls establish a deterministic build/configuration contract. They do
 not prove provider ownership or authorize a production connection, deployment,
 or remote Supabase operation.
 
+## Package C implementation record
+
+Package C implements local hardening controls while preserving the Package A
+findings and the decision's release gates:
+
+- Browser policy uses nonce-bound scripts, narrow sources, the exact validated
+  virtual-hosted R2 presigned PUT origin when configured, production-only HSTS
+  without preload/subdomain scope, and private-route robots/admin noindex.
+- Request context accepts only bounded canonical IDs; canonical environment and
+  release identity feed a fail-closed redacting logger and safe diagnostics.
+  Telemetry is conditional and no-op without an approved provider transport;
+  Sentry/provider wiring remains Package E.
+- Liveness is public and dependency-free. Readiness is a minimal, coalesced,
+  read-only database probe with bounded responses and no disclosed topology or
+  secret detail. It is not an R2/provider probe.
+- Existing workers now produce aggregate PII-free summaries and enforce bounded
+  attempts, poison outcomes, and lost-lease-safe transitions. Scheduler/runtime
+  reporter wiring, provider adapters, alerts, dashboards, and recovery runbooks
+  are still required before worker enablement.
+- Public lead intake is fail-closed in preview/production when challenge
+  verification is unavailable; honeypot/body bounds are enforced and forwarding
+  headers remain untrusted. The durable DB rate control is retained, while
+  trusted-proxy policy and query/index measurement remain deferred.
+- Media and matching have only the safe current-model bounds: media body/decode/
+  MIME/key/batch/encoded-output controls; matching authorization before expense
+  and a 500-candidate maximum. Persisted upload quotas and matching cooldown
+  policy remain deferred. Direct-ID responses are normalized without collapsing
+  meaningful lifecycle, conflict, MFA, or authorization semantics.
+
+Package C local test evidence does not satisfy every release gate. In particular,
+the C4 DB-backed integration and sitemap-prerender build checks are environment
+blocked by unavailable local PostgreSQL/Supabase, and `npm audit` is blocked by
+the restricted/offline registry boundary. Package D/E work remains mandatory;
+no deployment, remote mutation, provider enablement, or final release approval
+is implied.
+
 ## Alternatives considered
 
 ### Release using documented provider defaults

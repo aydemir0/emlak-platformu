@@ -1,7 +1,12 @@
 import { describe, expect, it } from "vitest";
 
 import { parsePublicEnv } from "@/config/env.client";
-import { parseServerEnv, parseServerPublicEnv } from "@/config/env.server";
+import {
+  parseRuntimeIdentity,
+  parseServerEnv,
+  parseServerPublicEnv,
+  parseServerReadinessEnv,
+} from "@/config/env.server";
 
 const localPublicValues = {
   NEXT_PUBLIC_SUPABASE_URL: "http://127.0.0.1:55321",
@@ -31,6 +36,18 @@ const productionR2Values = {
 };
 
 describe("environment boundaries", () => {
+  it("parses a bounded runtime identity independently of dependency config", () => {
+    expect(
+      parseRuntimeIdentity({ APP_ENV: "preview", APP_RELEASE: "release-42" }),
+    ).toEqual({ APP_ENV: "preview", APP_RELEASE: "release-42" });
+    expect(() =>
+      parseRuntimeIdentity({
+        APP_ENV: "production",
+        APP_RELEASE: "release with spaces",
+      }),
+    ).toThrow();
+  });
+
   it("guards server-side public Supabase configuration without requiring secrets", () => {
     expect(
       parseServerPublicEnv({
@@ -131,6 +148,26 @@ describe("environment boundaries", () => {
         bucketName: "production-media-bucket",
       },
     });
+  });
+
+  it("keeps R2 outside critical runtime readiness validation", () => {
+    const withoutR2 = {
+      ...remotePublicValues,
+      ...sharedServerValues,
+      APP_ENV: "production",
+      APP_BASE_URL: "https://emlak.example.test/",
+      APP_RELEASE: "461ca1b9d39f",
+      DATABASE_URL: remoteDatabaseUrl,
+    };
+
+    expect(parseServerReadinessEnv(withoutR2)).toMatchObject({
+      APP_ENV: "production",
+      APP_RELEASE: "461ca1b9d39f",
+      DATABASE_URL: remoteDatabaseUrl,
+    });
+    expect(() => parseServerEnv(withoutR2)).toThrow(
+      "R2 configuration is required in production",
+    );
   });
 
   it.each([
@@ -383,6 +420,9 @@ describe("environment boundaries", () => {
     ).toBe(3);
     expect(() =>
       parseServerEnv({ ...values, MATCHING_CANDIDATE_LIMIT: "0" }),
+    ).toThrow();
+    expect(() =>
+      parseServerEnv({ ...values, MATCHING_CANDIDATE_LIMIT: "501" }),
     ).toThrow();
   });
 

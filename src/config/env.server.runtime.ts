@@ -1,17 +1,14 @@
 import "server-only";
 
-import { parseServerEnv, parseServerPublicEnv } from "@/config/env.server";
+import {
+  parseRuntimeIdentity,
+  parseServerEnv,
+  parseServerPublicEnv,
+  parseServerReadinessEnv,
+} from "@/config/env.server";
 
-export function getServerPublicEnv() {
-  return parseServerPublicEnv({
-    APP_ENV: process.env.APP_ENV,
-    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
-    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
-  });
-}
-
-export function getServerEnv() {
-  return parseServerEnv({
+function getRuntimeValues() {
+  return {
     APP_ENV: process.env.APP_ENV,
     APP_BASE_URL: process.env.APP_BASE_URL,
     APP_RELEASE: process.env.APP_RELEASE,
@@ -28,5 +25,30 @@ export function getServerEnv() {
     R2_BUCKET_NAME: process.env.R2_BUCKET_NAME,
     R2_ACCESS_KEY_ID: process.env.R2_ACCESS_KEY_ID,
     R2_SECRET_ACCESS_KEY: process.env.R2_SECRET_ACCESS_KEY,
+  };
+}
+
+export function getRuntimeIdentity() {
+  return parseRuntimeIdentity(getRuntimeValues());
+}
+
+export function getServerPublicEnv() {
+  return parseServerPublicEnv({
+    APP_ENV: process.env.APP_ENV,
+    NEXT_PUBLIC_SUPABASE_URL: process.env.NEXT_PUBLIC_SUPABASE_URL,
+    NEXT_PUBLIC_SUPABASE_ANON_KEY: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY,
   });
+}
+
+export function getServerEnv() {
+  return parseServerEnv(getRuntimeValues());
+}
+
+export function getServerReadinessEnv() {
+  return parseServerReadinessEnv(getRuntimeValues());
+}
+
+export function getDatabaseReadinessEnv() {
+  const { DATABASE_URL } = getServerReadinessEnv();
+  return { DATABASE_URL };
 }

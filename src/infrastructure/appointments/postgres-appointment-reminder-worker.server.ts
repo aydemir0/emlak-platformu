@@ -1,13 +1,14 @@
 import "server-only";
 import type { Pool } from "pg";
 import type { AppointmentReminderWorkerRepository } from "@/application/appointments/appointment-reminder-outbox";
+import { WorkerLeaseLostError } from "@/application/observability/worker-run";
 import { getDatabasePool } from "@/infrastructure/postgres/pool.server";
 
 export class PostgresAppointmentReminderWorkerRepository implements AppointmentReminderWorkerRepository {
   constructor(private readonly pool: Pick<Pool, "query"> = getDatabasePool()) {}
   async claim(workerId: string, limit: number, leaseMs: number) {
     const result = await this.pool.query(
-      "with candidates as (select id from public.outbox_messages where event_name='appointment.reminder_requested.v1' and ((status='PENDING' and next_attempt_at <= now()) or (status='PROCESSING' and lease_expires_at <= now())) order by next_attempt_at,created_at,id for update skip locked limit $1) update public.outbox_messages message set status='PROCESSING',attempt_count=message.attempt_count+1,lease_owner=$2,lease_expires_at=now()+($3::bigint * interval '1 millisecond'),last_attempt_at=now(),last_error_code=null from candidates where message.id=candidates.id returning message.id,message.payload,message.correlation_id,message.idempotency_key,message.attempt_count",
+      "with candidates as (select id,status='PROCESSING' as recovered_stale_lease from public.outbox_messages where event_name='appointment.reminder_requested.v1' and ((status='PENDING' and next_attempt_at <= now()) or (status='PROCESSING' and lease_expires_at <= now())) order by next_attempt_at,created_at,id for update skip locked limit $1) update public.outbox_messages message set status='PROCESSING',attempt_count=message.attempt_count+1,lease_owner=$2,lease_expires_at=now()+($3::bigint * interval '1 millisecond'),last_attempt_at=now(),last_error_code=null from candidates where message.id=candidates.id returning message.id,message.payload,message.correlation_id,message.idempotency_key,message.attempt_count,candidates.recovered_stale_lease",
       [limit, workerId, leaseMs],
     );
     return result.rows.map((row) => ({
@@ -16,6 +17,7 @@ export class PostgresAppointmentReminderWorkerRepository implements AppointmentR
       correlationId: row.correlation_id,
       idempotencyKey: row.idempotency_key,
       attemptCount: row.attempt_count,
+      recoveredStaleLease: row.recovered_stale_lease,
     }));
   }
   async currentAppointment(id: string) {
@@ -34,10 +36,12 @@ export class PostgresAppointmentReminderWorkerRepository implements AppointmentR
       : null;
   }
   async markProcessed(id: string, workerId: string) {
-    await this.pool.query(
-      "update public.outbox_messages set status='PROCESSED',lease_owner=null,lease_expires_at=null,processed_at=now(),last_error_code=null where id=$1 and status='PROCESSING' and lease_owner=$2",
+    const result = await this.pool.query(
+      "update public.outbox_messages set status='PROCESSED',lease_owner=null,lease_expires_at=null,processed_at=now(),last_error_code=null where id=$1 and status='PROCESSING' and lease_owner=$2 and lease_expires_at>now()",
       [id, workerId],
     );
+    if (result.rowCount !== 1)
+      throw new WorkerLeaseLostError("appointment.reminder", id);
   }
   async markFailed(
     id: string,
@@ -45,13 +49,15 @@ export class PostgresAppointmentReminderWorkerRepository implements AppointmentR
     failure: { code: string; retryable: boolean },
     retryDelayMs: number,
   ) {
-    await this.pool.query(
+    const result = await this.pool.query(
       failure.retryable
-        ? "update public.outbox_messages set status='PENDING',lease_owner=null,lease_expires_at=null,next_attempt_at=now()+($3::bigint * interval '1 millisecond'),last_error_code=$4 where id=$1 and status='PROCESSING' and lease_owner=$2"
-        : "update public.outbox_messages set status='DEAD_LETTER',lease_owner=null,lease_expires_at=null,dead_lettered_at=now(),last_error_code=$3 where id=$1 and status='PROCESSING' and lease_owner=$2",
+        ? "update public.outbox_messages set status='PENDING',lease_owner=null,lease_expires_at=null,next_attempt_at=now()+($3::bigint * interval '1 millisecond'),last_error_code=$4 where id=$1 and status='PROCESSING' and lease_owner=$2 and lease_expires_at>now()"
+        : "update public.outbox_messages set status='DEAD_LETTER',lease_owner=null,lease_expires_at=null,dead_lettered_at=now(),last_error_code=$3 where id=$1 and status='PROCESSING' and lease_owner=$2 and lease_expires_at>now()",
       failure.retryable
         ? [id, workerId, retryDelayMs, failure.code]
         : [id, workerId, failure.code],
     );
+    if (result.rowCount !== 1)
+      throw new WorkerLeaseLostError("appointment.reminder", id);
   }
 }
