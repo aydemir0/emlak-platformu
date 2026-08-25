@@ -17,11 +17,23 @@ export function PublicLeadContactForm({
     initialState,
   );
   const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const unavailable = state.error === "LEAD_INTAKE_UNAVAILABLE";
 
   return (
     <form action={action} className="space-y-3">
       <input name="propertyId" type="hidden" value={propertyId} />
       <input name="idempotencyKey" type="hidden" value={idempotencyKey} />
+      <div aria-hidden="true" className="hidden">
+        <label>
+          Web sitesi
+          <input
+            autoComplete="off"
+            name="companyWebsite"
+            tabIndex={-1}
+            type="text"
+          />
+        </label>
+      </div>
       <label className="grid gap-1 text-sm">
         Adınız
         <input
@@ -63,13 +75,17 @@ export function PublicLeadContactForm({
       </label>
       <button
         className="bg-primary text-primary-foreground w-full rounded-lg px-4 py-2"
-        disabled={pending}
+        disabled={pending || unavailable}
         type="submit"
       >
         {pending ? "Gönderiliyor…" : "Danışmana ulaş"}
       </button>
       {state.accepted ? <p aria-live="polite">Talebiniz alındı.</p> : null}
-      {state.error ? (
+      {unavailable ? (
+        <p aria-live="polite" role="status">
+          İletişim formu şu anda kullanılamıyor.
+        </p>
+      ) : state.error ? (
         <p aria-live="polite">Lütfen zorunlu alanları kontrol edin.</p>
       ) : null}
     </form>

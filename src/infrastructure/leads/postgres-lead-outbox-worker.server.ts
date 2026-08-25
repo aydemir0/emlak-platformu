@@ -7,20 +7,20 @@ import type {
   LeadOutboxFailure,
   LeadOutboxWorkerRepository,
 } from "@/application/leads/lead-outbox-worker";
-import { getLocalDatabasePool } from "@/infrastructure/postgres/pool.server";
+import { WorkerLeaseLostError } from "@/application/observability/worker-run";
+import { getDatabasePool } from "@/infrastructure/postgres/pool.server";
 
 export class PostgresLeadOutboxWorkerRepository implements LeadOutboxWorkerRepository {
-  constructor(
-    private readonly pool: Pick<Pool, "query"> = getLocalDatabasePool(),
-  ) {}
+  constructor(private readonly pool: Pick<Pool, "query"> = getDatabasePool()) {}
 
   async claim(workerId: string, limit: number, leaseMs: number) {
     const result = await this.pool.query(
       `with candidates as (
-         select id
+         select id,status='PROCESSING' as recovered_stale_lease
          from public.outbox_messages
-         where (status='PENDING' and next_attempt_at <= now())
-            or (status='PROCESSING' and lease_expires_at <= now())
+         where event_name in ('lead.notification_requested','lead.analytics_requested')
+           and ((status='PENDING' and next_attempt_at <= now())
+             or (status='PROCESSING' and lease_expires_at <= now()))
          order by next_attempt_at, created_at, id
          for update skip locked
          limit $1
@@ -35,7 +35,8 @@ export class PostgresLeadOutboxWorkerRepository implements LeadOutboxWorkerRepos
        from candidates
        where message.id=candidates.id
        returning message.id,message.event_name,message.payload,message.correlation_id,
-                 message.idempotency_key,message.attempt_count`,
+                 message.idempotency_key,message.attempt_count,
+                 candidates.recovered_stale_lease`,
       [limit, workerId, leaseMs],
     );
     return result.rows.map((row): ClaimedLeadOutboxMessage => ({
@@ -45,17 +46,20 @@ export class PostgresLeadOutboxWorkerRepository implements LeadOutboxWorkerRepos
       correlationId: row.correlation_id,
       idempotencyKey: row.idempotency_key,
       attemptCount: row.attempt_count,
+      recoveredStaleLease: row.recovered_stale_lease,
     }));
   }
 
   async markProcessed(messageId: string, workerId: string) {
-    await this.pool.query(
+    const result = await this.pool.query(
       `update public.outbox_messages
        set status='PROCESSED', lease_owner=null, lease_expires_at=null,
            processed_at=now(), last_error_code=null
-       where id=$1 and status='PROCESSING' and lease_owner=$2`,
+       where id=$1 and status='PROCESSING' and lease_owner=$2 and lease_expires_at>now()`,
       [messageId, workerId],
     );
+    if (result.rowCount !== 1)
+      throw new WorkerLeaseLostError("lead.outbox", messageId);
   }
 
   async markFailed(
@@ -65,22 +69,26 @@ export class PostgresLeadOutboxWorkerRepository implements LeadOutboxWorkerRepos
     retryDelayMs: number,
   ) {
     if (failure.retryable) {
-      await this.pool.query(
+      const result = await this.pool.query(
         `update public.outbox_messages
          set status='PENDING', lease_owner=null, lease_expires_at=null,
              next_attempt_at=now()+($3::bigint * interval '1 millisecond'),
              last_error_code=$4
-         where id=$1 and status='PROCESSING' and lease_owner=$2`,
+         where id=$1 and status='PROCESSING' and lease_owner=$2 and lease_expires_at>now()`,
         [messageId, workerId, retryDelayMs, failure.code],
       );
+      if (result.rowCount !== 1)
+        throw new WorkerLeaseLostError("lead.outbox", messageId);
       return;
     }
-    await this.pool.query(
+    const result = await this.pool.query(
       `update public.outbox_messages
        set status='DEAD_LETTER', lease_owner=null, lease_expires_at=null,
            dead_lettered_at=now(), last_error_code=$3
-       where id=$1 and status='PROCESSING' and lease_owner=$2`,
+       where id=$1 and status='PROCESSING' and lease_owner=$2 and lease_expires_at>now()`,
       [messageId, workerId, failure.code],
     );
+    if (result.rowCount !== 1)
+      throw new WorkerLeaseLostError("lead.outbox", messageId);
   }
 }

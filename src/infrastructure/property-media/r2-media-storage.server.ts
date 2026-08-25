@@ -16,6 +16,7 @@ import type {
   MediaStorage,
   StoredObjectMetadata,
 } from "@/application/property-media/media-storage";
+import { getR2Addressing } from "@/config/r2-addressing";
 
 type S3Sender = Readonly<{
   send(command: unknown): Promise<Record<string, unknown>>;
@@ -64,6 +65,25 @@ function assertConfig(config: R2Config): void {
   }
 }
 
+export function createR2S3Client(config: R2Config): S3Client {
+  assertConfig(config);
+  const addressing = getR2Addressing({
+    accountId: config.accountId,
+    bucketName: config.bucket,
+  });
+  if (!addressing) throw new Error("MEDIA_STORAGE_UNAVAILABLE");
+
+  return new S3Client({
+    region: "auto",
+    endpoint: addressing.endpoint,
+    forcePathStyle: false,
+    credentials: {
+      accessKeyId: config.accessKeyId,
+      secretAccessKey: config.secretAccessKey,
+    },
+  });
+}
+
 function checksum(bytes: Uint8Array): string {
   return createHash("sha256").update(bytes).digest("hex");
 }
@@ -82,15 +102,7 @@ export class R2MediaStorage implements MediaStorage {
     private readonly config: R2Config,
     dependencies: R2Dependencies = {},
   ) {
-    assertConfig(config);
-    const actualClient = new S3Client({
-      region: "auto",
-      endpoint: `https://${config.accountId}.r2.cloudflarestorage.com`,
-      credentials: {
-        accessKeyId: config.accessKeyId,
-        secretAccessKey: config.secretAccessKey,
-      },
-    });
+    const actualClient = createR2S3Client(config);
     this.client = dependencies.client ?? (actualClient as unknown as S3Sender);
     this.signingClient = dependencies.client ?? actualClient;
     this.signer = dependencies.signer ?? (getSignedUrl as Presigner);
@@ -238,12 +250,15 @@ export class R2MediaStorage implements MediaStorage {
     if (keys.length === 0) return;
     if (keys.length > 1_000) throw new Error("MEDIA_VALIDATION_FAILED");
     keys.forEach(assertControlledKey);
-    await this.client.send(
+    const result = await this.client.send(
       new DeleteObjectsCommand({
         Bucket: this.config.bucket,
         Delete: { Objects: keys.map((Key) => ({ Key })), Quiet: true },
       }),
     );
+    if (Array.isArray(result.Errors) && result.Errors.length > 0) {
+      throw new Error("MEDIA_STORAGE_UNAVAILABLE");
+    }
   }
 
   async list(prefix: string, cursor: string | undefined, limit: number) {

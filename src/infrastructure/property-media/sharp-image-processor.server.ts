@@ -78,11 +78,21 @@ export class SharpImageProcessor implements ImageProcessor {
       );
 
       const variants: ProcessedVariant[] = [];
+      let totalVariantBytes = 0;
       for (const width of selectVariantWidths(autoWidth, recipe)) {
         for (const format of ["webp", "avif"] as const) {
-          variants.push(
-            await this.createVariant(source, options, width, format, recipe),
+          const variant = await this.createVariant(
+            source,
+            options,
+            width,
+            format,
+            recipe,
           );
+          totalVariantBytes += variant.bytes.byteLength;
+          if (totalVariantBytes > recipe.maximumTotalVariantBytes) {
+            throw validationFailure();
+          }
+          variants.push(variant);
         }
       }
       return {
@@ -126,6 +136,9 @@ export class SharpImageProcessor implements ImageProcessor {
         ? pipeline.webp({ quality: recipe.webpQuality })
         : pipeline.avif({ quality: recipe.avifQuality });
     const { data, info } = await pipeline.toBuffer({ resolveWithObject: true });
+    if (data.byteLength === 0 || data.byteLength > recipe.maximumVariantBytes) {
+      throw validationFailure();
+    }
     const outputMetadata = await sharp(data, {
       failOn: "error",
       limitInputPixels: recipe.maximumPixels,

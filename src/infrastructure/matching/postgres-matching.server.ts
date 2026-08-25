@@ -20,7 +20,8 @@ import {
   type Preference,
   type PropertyMatchCandidateV2,
 } from "@/domain/matching/matching-engine-v2";
-import { getLocalDatabasePool } from "@/infrastructure/postgres/pool.server";
+import { MATCHING_CANDIDATE_LIMIT_MAXIMUM } from "@/domain/matching/matching-policy";
+import { getDatabasePool } from "@/infrastructure/postgres/pool.server";
 
 type State = "MISSING" | "FLEXIBLE" | "CONSTRAINED";
 const states: readonly State[] = ["MISSING", "FLEXIBLE", "CONSTRAINED"];
@@ -238,42 +239,70 @@ class PostgresMatchingTransaction implements MatchingTransaction {
       "update public.property_customer_matches set status='STALE',updated_at=now(),version=version+1 where customer_request_id=$1 and status in ('PROPOSED','REVIEWED') and deleted_at is null",
       [input.profile.requestId],
     );
-    for (const match of input.matches) {
-      const inserted = await this.client.query(
-        `insert into public.property_customer_matches(property_id,customer_id,customer_request_id,rule_version,property_version,request_version,basis_fingerprint,status,source,score,generated_at)
-         values($1,$2,$3,$4,$5,$6,$7,'PROPOSED','RULES',$8,now())
-         on conflict (property_id,customer_id,customer_request_id,rule_version,property_version,request_version,basis_fingerprint)
-         do update set status='PROPOSED',score=excluded.score,generated_at=excluded.generated_at,updated_at=now(),version=public.property_customer_matches.version+1
-         returning id`,
-        [
-          match.propertyId,
-          input.profile.customerId,
-          input.profile.requestId,
-          MATCHING_RULE_VERSION,
-          match.propertyVersion.toString(),
-          input.profile.version.toString(),
-          match.fingerprint,
-          match.totalScore / 100,
-        ],
+    if (input.matches.length === 0) return;
+    const payload = input.matches.map((match) => ({
+      propertyId: match.propertyId,
+      propertyVersion: match.propertyVersion.toString(),
+      fingerprint: match.fingerprint,
+      totalScore: match.totalScore / 100,
+      reasons: match.reasons.map((reason) => ({
+        code: reason.code,
+        contribution: reason.points / 100,
+      })),
+    }));
+    const persisted = await this.client.query<{ persisted_count: number }>(
+      `with input_matches as (
+        select * from jsonb_to_recordset($1::jsonb) as item(
+          "propertyId" uuid,"propertyVersion" bigint,fingerprint text,"totalScore" numeric,reasons jsonb
+        )
+      ), upserted_matches as (
+        insert into public.property_customer_matches(
+          property_id,customer_id,customer_request_id,rule_version,property_version,
+          request_version,basis_fingerprint,status,source,score,generated_at
+        )
+        select "propertyId",$2,$3,$4,"propertyVersion",$5,fingerprint,
+          'PROPOSED','RULES',"totalScore",now()
+        from input_matches
+        on conflict (property_id,customer_id,customer_request_id,rule_version,property_version,request_version,basis_fingerprint)
+        do update set status='PROPOSED',score=excluded.score,generated_at=excluded.generated_at,
+          updated_at=now(),version=public.property_customer_matches.version+1
+        returning id,property_id,property_version,basis_fingerprint
+      ), input_reasons as (
+        select persisted.id,reason.code,reason.contribution
+        from upserted_matches persisted
+        join input_matches item on item."propertyId"=persisted.property_id
+          and item."propertyVersion"=persisted.property_version
+          and item.fingerprint=persisted.basis_fingerprint
+        cross join lateral jsonb_to_recordset(item.reasons) as reason(code text,contribution numeric)
+      ), upserted_reasons as (
+        insert into public.property_customer_match_reasons(
+          property_customer_match_id,reason_code,contribution,explanation
+        )
+        select id,code,contribution,null from input_reasons
+        on conflict (property_customer_match_id,reason_code)
+        do update set contribution=excluded.contribution,explanation=null
+        returning 1
+      )
+      select count(*)::int as persisted_count from upserted_matches`,
+      [
+        JSON.stringify(payload),
+        input.profile.customerId,
+        input.profile.requestId,
+        MATCHING_RULE_VERSION,
+        input.profile.version.toString(),
+      ],
+    );
+    if (persisted.rows[0]?.persisted_count !== input.matches.length) {
+      throw new ApplicationError(
+        "MATCHING_PERSISTENCE_FAILED",
+        "MATCHING_PERSISTENCE_FAILED",
       );
-      const id = inserted.rows[0]?.id;
-      if (!id)
-        throw new ApplicationError(
-          "MATCHING_PERSISTENCE_FAILED",
-          "MATCHING_PERSISTENCE_FAILED",
-        );
-      for (const reason of match.reasons) {
-        await this.client.query(
-          "insert into public.property_customer_match_reasons(property_customer_match_id,reason_code,contribution,explanation) values($1,$2,$3,null) on conflict (property_customer_match_id,reason_code) do update set contribution=excluded.contribution,explanation=null",
-          [id, reason.code, reason.points / 100],
-        );
-      }
     }
   }
 }
 
 export class PostgresMatchingUnitOfWork implements MatchingUnitOfWork {
-  constructor(private readonly pool: Pool = getLocalDatabasePool()) {}
+  constructor(private readonly pool: Pool = getDatabasePool()) {}
   async transaction<T>(work: (transaction: MatchingTransaction) => Promise<T>) {
     const client = await this.pool.connect();
     try {
@@ -308,9 +337,7 @@ const componentFor = (code: string) => {
 };
 
 export class PostgresMatchingReadRepository implements MatchingReadRepository {
-  constructor(
-    private readonly pool: Pick<Pool, "query"> = getLocalDatabasePool(),
-  ) {}
+  constructor(private readonly pool: Pick<Pool, "query"> = getDatabasePool()) {}
   async get(
     actor: StaffPrincipal,
     customerRequestId: string,
@@ -332,18 +359,36 @@ export class PostgresMatchingReadRepository implements MatchingReadRepository {
         [customerRequestId],
       ),
       this.pool.query(
-        `select m.property_id,m.status,m.score,p.title,p.public_id,
-          coalesce(jsonb_agg(jsonb_build_object('code',r.reason_code,'points',r.contribution)) filter(where r.reason_code is not null),'[]'::jsonb) reasons
+        `with bounded_matches as (
+          select m.id,m.property_id,m.status,m.score,p.title,p.public_id
           from public.property_customer_matches m
           join public.properties p on p.id=m.property_id and p.deleted_at is null
-          left join public.property_customer_match_reasons r on r.property_customer_match_id=m.id
           left join public.advisors mine on mine.user_identity_id=$1 and mine.status='active' and mine.deleted_at is null
-         where m.customer_request_id=$2 and m.deleted_at is null and m.status in ('PROPOSED','REVIEWED','STALE')
-           and ($3='ADMIN' or exists(select 1 from public.property_advisor_assignments paa where paa.property_id=m.property_id and paa.advisor_id=mine.id and paa.ended_at is null))
-         group by m.id,p.title,p.public_id order by m.status='STALE',m.score desc,m.property_id asc`,
-        [actor.identityId, customerRequestId, actor.role],
+          where m.customer_request_id=$2 and m.deleted_at is null and m.status in ('PROPOSED','REVIEWED','STALE')
+            and ($3='ADMIN' or exists(select 1 from public.property_advisor_assignments paa where paa.property_id=m.property_id and paa.advisor_id=mine.id and paa.ended_at is null))
+          order by m.status='STALE',m.score desc,m.property_id asc
+          limit $4
+        )
+        select m.property_id,m.status,m.score,m.title,m.public_id,
+          coalesce(jsonb_agg(jsonb_build_object('code',r.reason_code,'points',r.contribution)) filter(where r.reason_code is not null),'[]'::jsonb) reasons
+          from bounded_matches m
+          left join public.property_customer_match_reasons r on r.property_customer_match_id=m.id
+         group by m.id,m.property_id,m.status,m.score,m.title,m.public_id
+         order by m.status='STALE',m.score desc,m.property_id asc`,
+        [
+          actor.identityId,
+          customerRequestId,
+          actor.role,
+          MATCHING_CANDIDATE_LIMIT_MAXIMUM + 1,
+        ],
       ),
     ]);
+    if (matches.rows.length > MATCHING_CANDIDATE_LIMIT_MAXIMUM) {
+      throw new ApplicationError(
+        "MATCHING_RESULT_LIMIT_EXCEEDED",
+        "MATCHING_RESULT_LIMIT_EXCEEDED",
+      );
+    }
     const featureValue = features.rows.length
       ? features.rows
           .map((item) => `${item.priority}: ${item.label}`)

@@ -2,6 +2,8 @@ import type { ProcessedImage } from "@/application/property-media/image-processo
 
 export type ProcessingClaim = Readonly<{
   attemptId: string;
+  attemptNumber: number;
+  recoveredStaleLease: boolean;
   mediaId: string;
   propertyId: string;
   sourceVersion: number;

@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { notFound, permanentRedirect } from "next/navigation";
 
 import type { PublicPropertyDetail } from "@/application/public-properties/public-property-contracts";
@@ -26,8 +27,9 @@ function formatPrice(property: PublicPropertyDetail): string {
 }
 
 export function PublicPropertyDetailView({
+  nonce,
   property,
-}: Readonly<{ property: PublicPropertyDetail }>) {
+}: Readonly<{ nonce?: string; property: PublicPropertyDetail }>) {
   const jsonLd = buildPublicPropertyBreadcrumbJsonLd(property);
 
   return (
@@ -98,6 +100,7 @@ export function PublicPropertyDetailView({
         dangerouslySetInnerHTML={{
           __html: serializePublicPropertyJsonLd(jsonLd),
         }}
+        nonce={nonce}
         type="application/ld+json"
       />
     </main>
@@ -119,7 +122,12 @@ export default async function PublicPropertyDetailPage({
   const resolution = await loadPublicPropertyDetailPage(await params);
   switch (resolution.kind) {
     case "PROPERTY":
-      return <PublicPropertyDetailView property={resolution.property} />;
+      return (
+        <PublicPropertyDetailView
+          nonce={(await headers()).get("x-nonce") ?? undefined}
+          property={resolution.property}
+        />
+      );
     case "REDIRECT":
       permanentRedirect(resolution.location);
     case "NOT_FOUND":

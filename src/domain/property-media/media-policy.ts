@@ -95,6 +95,25 @@ export function assertCompleteVariantSet(
   }
 }
 
+export function assertEncodedImageOutputLimits(
+  variants: readonly { bytes: Uint8Array }[],
+  recipe: MediaRecipe,
+): void {
+  let totalBytes = 0;
+  for (const variant of variants) {
+    if (
+      variant.bytes.byteLength === 0 ||
+      variant.bytes.byteLength > recipe.maximumVariantBytes
+    ) {
+      throw new Error("MEDIA_VALIDATION_FAILED");
+    }
+    totalBytes += variant.bytes.byteLength;
+    if (totalBytes > recipe.maximumTotalVariantBytes) {
+      throw new Error("MEDIA_VALIDATION_FAILED");
+    }
+  }
+}
+
 export function assertCompleteOrdering(
   activeMediaIds: readonly string[],
   requested: readonly MediaOrderingItem[],

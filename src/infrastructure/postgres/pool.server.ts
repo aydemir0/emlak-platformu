@@ -2,17 +2,17 @@ import "server-only";
 
 import { Pool } from "pg";
 
-import { getServerEnv } from "@/config/env.server.runtime";
+import { getDatabaseReadinessEnv } from "@/config/env.server.runtime";
 
 let pool: Pool | undefined;
 
-export function getLocalDatabasePool(): Pool {
+export function getDatabasePool(): Pool {
   pool ??= new Pool({
-    connectionString: getServerEnv().LOCAL_DATABASE_URL,
+    connectionString: getDatabaseReadinessEnv().DATABASE_URL,
     max: 10,
     idleTimeoutMillis: 30_000,
     connectionTimeoutMillis: 5_000,
-    application_name: "emlak-platformu-phase5",
+    application_name: "emlak-platformu",
   });
   return pool;
 }

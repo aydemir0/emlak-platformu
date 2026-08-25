@@ -12,14 +12,18 @@ const pool = new Pool({
 });
 const ids: string[] = [];
 
-async function message(order: string) {
+async function message(order: string, eventName = "lead.analytics_requested") {
   const id = randomUUID();
+  const appointment = eventName === "appointment.reminder_requested.v1";
   ids.push(id);
   await pool.query(
     `insert into public.outbox_messages(id,event_name,owning_domain,aggregate_type,event_version,aggregate_id,correlation_id,idempotency_key,payload,next_attempt_at)
-     values($1,'lead.analytics_requested','leads','lead',1,$2,$3,$4,$5,$6::timestamptz)`,
+     values($1,$2,$3,$4,1,$5,$6,$7,$8,$9::timestamptz)`,
     [
       id,
+      eventName,
+      appointment ? "appointments" : "leads",
+      appointment ? "appointment" : "lead",
       randomUUID(),
       randomUUID(),
       `outbox-test-${id}`,
@@ -78,13 +82,17 @@ describe("Postgres lead outbox worker", () => {
     const id = await message("1900-01-01T00:00:00Z");
     const repository = new PostgresLeadOutboxWorkerRepository(pool);
     const original = await repository.claim("worker-a", 1, 60_000);
-    expect(original[0]?.id).toBe(id);
+    expect(original[0]).toMatchObject({ id, recoveredStaleLease: false });
     await pool.query(
       "update public.outbox_messages set lease_expires_at=now()-interval '1 second' where id=$1",
       [id],
     );
     const reclaimed = await repository.claim("worker-b", 1, 60_000);
-    expect(reclaimed[0]).toMatchObject({ id, attemptCount: 2 });
+    expect(reclaimed[0]).toMatchObject({
+      id,
+      attemptCount: 2,
+      recoveredStaleLease: true,
+    });
   });
 
   it("persists retryable and non-retryable outcomes", async () => {
@@ -121,5 +129,66 @@ describe("Postgres lead outbox worker", () => {
         },
       ]),
     );
+  });
+
+  it("rejects a guarded transition after another worker owns the lease", async () => {
+    const id = await message("1900-01-01T00:00:00Z");
+    const repository = new PostgresLeadOutboxWorkerRepository(pool);
+    expect((await repository.claim("worker-a", 1, 60_000))[0]?.id).toBe(id);
+
+    await expect(repository.markProcessed(id, "worker-b")).rejects.toThrow(
+      "WORKER_LEASE_LOST",
+    );
+    await expect(
+      repository.markFailed(
+        id,
+        "worker-b",
+        { code: "TEMP_DOWN", retryable: true },
+        10_000,
+      ),
+    ).rejects.toThrow("WORKER_LEASE_LOST");
+    await pool.query(
+      "update public.outbox_messages set lease_expires_at=now()-interval '1 second' where id=$1",
+      [id],
+    );
+    await expect(repository.markProcessed(id, "worker-a")).rejects.toThrow(
+      "WORKER_LEASE_LOST",
+    );
+
+    const state = await pool.query(
+      "select status,lease_owner from public.outbox_messages where id=$1",
+      [id],
+    );
+    expect(state.rows[0]).toEqual({
+      status: "PROCESSING",
+      lease_owner: "worker-a",
+    });
+  });
+
+  it("never claims another domain's appointment reminder", async () => {
+    const client = await pool.connect();
+    const appointmentId = randomUUID();
+    try {
+      await client.query("begin");
+      await client.query(
+        `insert into public.outbox_messages(id,event_name,owning_domain,aggregate_type,event_version,aggregate_id,correlation_id,idempotency_key,payload,next_attempt_at,created_at)
+         values($1,'appointment.reminder_requested.v1','appointments','appointment',1,$2,$3,$4,'{}','-infinity','1900-01-01T00:00:00Z')`,
+        [
+          appointmentId,
+          randomUUID(),
+          randomUUID(),
+          `appointment-isolation-${appointmentId}`,
+        ],
+      );
+
+      const claimed = await new PostgresLeadOutboxWorkerRepository(
+        client,
+      ).claim("lead-worker", 1, 60_000);
+
+      expect(claimed.map((item) => item.id)).not.toContain(appointmentId);
+    } finally {
+      await client.query("rollback");
+      client.release();
+    }
   });
 });

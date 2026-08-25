@@ -1,6 +1,6 @@
 "use server";
 
-import { createHmac, randomUUID } from "node:crypto";
+import { createHmac } from "node:crypto";
 
 import { headers } from "next/headers";
 
@@ -9,10 +9,12 @@ import { createPublicLead } from "@/application/leads/create-public-lead";
 import { getServerEnv } from "@/config/env.server.runtime";
 import { parsePublicLeadForm } from "@/domain/leads/public-lead-intake";
 import { PostgresPublicLeadUnitOfWork } from "@/infrastructure/leads/postgres-public-lead-unit-of-work.server";
+import { reportUnexpectedError } from "@/infrastructure/observability/runtime-observability.server";
+import { createRequestContext } from "@/lib/request-context";
 
 export type PublicLeadActionState = Readonly<{
   accepted: boolean;
-  error?: "LEAD_VALIDATION_FAILED";
+  error?: "LEAD_VALIDATION_FAILED" | "LEAD_INTAKE_UNAVAILABLE";
 }>;
 
 const accepted: PublicLeadActionState = { accepted: true };
@@ -21,12 +23,7 @@ function hmac(secret: string, value: string): string {
   return createHmac("sha256", secret).update(value).digest("hex");
 }
 
-function clientNetworkAddress(requestHeaders: Headers): string {
-  return (
-    requestHeaders.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    "unavailable"
-  );
-}
+const unavailableNetworkSource = "network-source-unavailable";
 
 function fingerprintInput(
   form: ReturnType<typeof parsePublicLeadForm>,
@@ -44,34 +41,58 @@ function fingerprintInput(
 export interface LeadChallengeVerifier {
   verify(
     input: Readonly<{ token: string | undefined; networkSignal: string }>,
-  ): Promise<boolean>;
+  ): Promise<"VERIFIED" | "REJECTED" | "UNAVAILABLE">;
 }
 
-// A provider is intentionally not activated in V1. This is the narrow future boundary.
-const optionalChallengeVerifier: LeadChallengeVerifier = {
+// No provider is selected. This boundary must never represent absence as success.
+const unconfiguredChallengeVerifier: LeadChallengeVerifier = {
   async verify() {
-    return true;
+    return "UNAVAILABLE";
   },
 };
+
+function challengeOutcome(
+  appEnvironment: string,
+  verification: Awaited<ReturnType<LeadChallengeVerifier["verify"]>>,
+): "ALLOW" | "REJECT" | "UNAVAILABLE" {
+  if (verification === "VERIFIED") return "ALLOW";
+  if (verification === "REJECTED") return "REJECT";
+  return appEnvironment === "local" || appEnvironment === "test"
+    ? "ALLOW"
+    : "UNAVAILABLE";
+}
 
 export async function createPublicLeadAction(
   _previous: PublicLeadActionState,
   formData: FormData,
 ): Promise<PublicLeadActionState> {
+  let form: ReturnType<typeof parsePublicLeadForm>;
   try {
-    const form = parsePublicLeadForm(Object.fromEntries(formData));
+    form = parsePublicLeadForm(Object.fromEntries(formData));
+  } catch {
+    return { accepted: false, error: "LEAD_VALIDATION_FAILED" };
+  }
+  if (form.companyWebsite !== undefined) return accepted;
+
+  let correlationId: string | undefined;
+  try {
     const requestHeaders = await headers();
+    const requestContext = createRequestContext(requestHeaders);
+    correlationId = requestContext.correlationId;
     const env = getServerEnv();
     const networkSignal = hmac(
       env.LEAD_INTAKE_HMAC_SECRET,
-      clientNetworkAddress(requestHeaders),
+      unavailableNetworkSource,
     );
-    if (
-      !(await optionalChallengeVerifier.verify({
-        token: form.challengeToken,
-        networkSignal,
-      }))
-    ) {
+    const challenge = await unconfiguredChallengeVerifier.verify({
+      token: form.challengeToken,
+      networkSignal,
+    });
+    const outcome = challengeOutcome(env.APP_ENV, challenge);
+    if (outcome === "UNAVAILABLE") {
+      return { accepted: false, error: "LEAD_INTAKE_UNAVAILABLE" };
+    }
+    if (outcome === "REJECT") {
       return accepted;
     }
     await createPublicLead(
@@ -91,13 +112,18 @@ export async function createPublicLeadAction(
           env.LEAD_INTAKE_HMAC_SECRET,
           fingerprintInput(form),
         ),
-        correlationId: randomUUID(),
-        requestId: requestHeaders.get("x-request-id") ?? randomUUID(),
+        ...requestContext,
         abuseNetworkSignal: networkSignal,
       },
     );
     return accepted;
   } catch (error) {
+    if (!(error instanceof ApplicationError)) {
+      reportUnexpectedError(error, {
+        correlationId,
+        operation: "lead.public-create",
+      });
+    }
     if (error instanceof ApplicationError) {
       if (error.code === "LEAD_VALIDATION_FAILED") {
         return { accepted: false, error: "LEAD_VALIDATION_FAILED" };

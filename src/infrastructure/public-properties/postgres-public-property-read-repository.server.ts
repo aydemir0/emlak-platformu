@@ -18,10 +18,12 @@ import {
   getIndexability,
   type PublicListingType,
 } from "@/domain/public-properties/public-property-seo";
-import { getLocalDatabasePool } from "@/infrastructure/postgres/pool.server";
+import { getDatabasePool } from "@/infrastructure/postgres/pool.server";
 
 const PAGE_SIZE = 24;
 const MAXIMUM_PAGE = 100;
+const SITEMAP_PAGE_SIZE = 10_000;
+const MAXIMUM_SITEMAP_PAGES = 1_000;
 
 type Queryable = Pick<Pool, "query">;
 
@@ -190,7 +192,7 @@ function hasFilters(query: PublicPropertyListQuery): boolean {
 }
 
 export class PostgresPublicPropertyReadRepository implements PublicPropertyReadRepository {
-  constructor(private readonly database: Queryable = getLocalDatabasePool()) {}
+  constructor(private readonly database: Queryable = getDatabasePool()) {}
 
   async getByRoute(route: string): Promise<PublicRouteResolution> {
     const current = await this.database.query<PublicPropertyRow>(
@@ -281,7 +283,38 @@ export class PostgresPublicPropertyReadRepository implements PublicPropertyReadR
     };
   }
 
-  async listSitemapEntries(): Promise<readonly PublicSitemapEntry[]> {
+  async countSitemapPages(): Promise<number> {
+    const result = await this.database.query<{ total: string }>(
+      `select count(*)::text as total
+      from public.properties p
+      join public.public_route_reservations rr on rr.id=p.current_route_reservation_id
+      join public.listing_types lt on lt.id=p.listing_type_id
+      where rr.retired_at is null
+        and p.current_state='ACTIVE'
+        and p.deleted_at is null
+        and lt.code in('SATILIK','KIRALIK')
+        and ${PUBLIC_MEDIA_EXISTS}`,
+    );
+    const pageCount = Math.max(
+      1,
+      Math.ceil(Number(result.rows[0]?.total ?? 0) / SITEMAP_PAGE_SIZE),
+    );
+    if (pageCount > MAXIMUM_SITEMAP_PAGES) {
+      throw new Error("PUBLIC_SITEMAP_PAGE_LIMIT_EXCEEDED");
+    }
+    return pageCount;
+  }
+
+  async listSitemapEntries(
+    page: number,
+  ): Promise<readonly PublicSitemapEntry[]> {
+    if (
+      !Number.isSafeInteger(page) ||
+      page < 0 ||
+      page >= MAXIMUM_SITEMAP_PAGES
+    ) {
+      throw new Error("PUBLIC_SITEMAP_PAGE_INVALID");
+    }
     const result = await this.database.query<{
       path: string;
       listing_type: PublicListingType;
@@ -304,7 +337,9 @@ export class PostgresPublicPropertyReadRepository implements PublicPropertyReadR
         and p.deleted_at is null
         and lt.code in('SATILIK','KIRALIK')
         and ${PUBLIC_MEDIA_EXISTS}
-      order by p.updated_at desc,p.id`,
+      order by p.id
+      limit $1 offset $2`,
+      [SITEMAP_PAGE_SIZE, page * SITEMAP_PAGE_SIZE],
     );
     return result.rows.map((row) => ({
       path: row.path,

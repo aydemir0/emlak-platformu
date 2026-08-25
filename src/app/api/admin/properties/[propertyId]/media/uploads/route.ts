@@ -2,11 +2,14 @@ import { z } from "zod";
 
 import { initializeMediaUpload } from "@/application/property-media/initialize-media-upload";
 import {
+  MEDIA_UPLOAD_METADATA_MAX_BYTES,
   mediaCommandContext,
   mediaFailure,
+  readBoundedMediaJson,
 } from "@/features/property-media/media-delivery.server";
 import { getMediaStorage } from "@/infrastructure/property-media/media-storage-factory.server";
 import { PostgresMediaUnitOfWork } from "@/infrastructure/property-media/postgres-media-unit-of-work.server";
+import { createRequestContext } from "@/lib/request-context";
 
 const bodySchema = z
   .object({
@@ -24,14 +27,18 @@ export async function POST(
   request: Request,
   context: { params: Promise<{ propertyId: string }> },
 ) {
+  const requestContext = createRequestContext(request.headers);
   try {
     const { propertyId } = z
       .object({ propertyId: z.uuid() })
       .parse(await context.params);
-    const body = bodySchema.parse(await request.json());
+    const body = bodySchema.parse(
+      await readBoundedMediaJson(request, MEDIA_UPLOAD_METADATA_MAX_BYTES),
+    );
     const commandContext = await mediaCommandContext(
       request,
       body.idempotencyKey,
+      requestContext,
     );
     const result = await initializeMediaUpload(
       new PostgresMediaUnitOfWork(),
@@ -50,6 +57,9 @@ export async function POST(
       upload: result.grant,
     });
   } catch (error) {
-    return mediaFailure(error);
+    return mediaFailure(error, {
+      correlationId: requestContext.correlationId,
+      operation: "media.upload.initialize",
+    });
   }
 }

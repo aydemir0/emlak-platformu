@@ -3,18 +3,23 @@ import type { NextConfig } from "next";
 const nextConfig: NextConfig = {
   poweredByHeader: false,
   reactStrictMode: true,
+  experimental: {
+    serverActions: {
+      bodySizeLimit: "64kb",
+    },
+  },
   async headers() {
     const contentSecurityPolicy = [
       "default-src 'self'",
       "base-uri 'self'",
       "form-action 'self'",
       "frame-ancestors 'none'",
+      "frame-src 'none'",
       "object-src 'none'",
-      "img-src 'self' data: blob:",
-      "font-src 'self'",
+      "img-src 'self'",
       "style-src 'self' 'unsafe-inline'",
-      "script-src 'self' 'unsafe-inline'",
-      "connect-src 'self' https: wss:",
+      "script-src 'self'",
+      "connect-src 'self'",
       "upgrade-insecure-requests",
     ].join("; ");
 
@@ -30,6 +35,9 @@ const nextConfig: NextConfig = {
             value: "camera=(), microphone=(), geolocation=(), payment=()",
           },
           { key: "X-Frame-Options", value: "DENY" },
+          ...(process.env.APP_ENV === "production"
+            ? [{ key: "Strict-Transport-Security", value: "max-age=63072000" }]
+            : []),
         ],
       },
     ];

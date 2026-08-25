@@ -9,10 +9,10 @@ import type {
   MediaReadRepository,
   PublicMediaDescriptor,
 } from "@/application/property-media/media-read-ports";
-import { getLocalDatabasePool } from "@/infrastructure/postgres/pool.server";
+import { getDatabasePool } from "@/infrastructure/postgres/pool.server";
 
 export class PostgresMediaReadRepository implements MediaReadRepository {
-  constructor(private readonly pool: Pool = getLocalDatabasePool()) {}
+  constructor(private readonly pool: Pool = getDatabasePool()) {}
 
   async listAdminPropertyMedia(actor: StaffPrincipal, propertyId: string) {
     const result = await this.pool.query<{

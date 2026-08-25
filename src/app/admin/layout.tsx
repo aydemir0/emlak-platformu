@@ -1,15 +1,43 @@
+import type { Metadata } from "next";
+import { headers } from "next/headers";
 import Link from "next/link";
 import { redirect } from "next/navigation";
 
+import {
+  ApplicationError,
+  isReportableOperationalFailure,
+} from "@/application/errors/application-error";
 import { requireStaffPrincipal } from "@/infrastructure/auth/require-staff-principal.server";
+import { reportUnexpectedError } from "@/infrastructure/observability/runtime-observability.server";
+import { createRequestContext } from "@/lib/request-context";
 
 export const dynamic = "force-dynamic";
+
+export const metadata: Metadata = {
+  robots: { index: false, follow: false },
+};
 
 export default async function AdminLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
-  const principal = await requireStaffPrincipal().catch(() => null);
-  if (!principal) redirect("/");
+  const requestContext = createRequestContext(await headers());
+  try {
+    await requireStaffPrincipal();
+  } catch (error) {
+    if (
+      error instanceof ApplicationError &&
+      ["UNAUTHENTICATED", "MFA_REQUIRED", "FORBIDDEN"].includes(error.code)
+    ) {
+      redirect("/");
+    }
+    if (isReportableOperationalFailure(error)) {
+      reportUnexpectedError(error, {
+        correlationId: requestContext.correlationId,
+        operation: "admin.layout.authenticate",
+      });
+    }
+    throw error;
+  }
 
   return (
     <div className="bg-muted/30 min-h-svh">

@@ -116,4 +116,30 @@ describe("Cloudflare R2 media storage adapter", () => {
     });
     expect(command.input).not.toHaveProperty("ACL");
   });
+
+  it("rejects a resolved batch delete response containing per-object errors", async () => {
+    const send = vi.fn().mockResolvedValue({
+      Deleted: [{ Key: key }],
+      Errors: [
+        {
+          Key: "private/originals/properties/private-object",
+          Code: "AccessDenied",
+          Message: "provider detail with secret",
+        },
+      ],
+    });
+    const storage = new R2MediaStorage(
+      {
+        accountId: "account-id",
+        accessKeyId: "access-key",
+        secretAccessKey: "secret-key",
+        bucket: "private-media",
+      },
+      { client: { send }, signer: vi.fn() },
+    );
+
+    await expect(storage.delete([key])).rejects.toMatchObject({
+      message: "MEDIA_STORAGE_UNAVAILABLE",
+    });
+  });
 });

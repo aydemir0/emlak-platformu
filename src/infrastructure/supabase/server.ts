@@ -3,12 +3,12 @@ import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 
-import { getPublicEnv } from "@/config/env.client";
+import { getServerPublicEnv } from "@/config/env.server.runtime";
 import type { Database } from "@/types/database.generated";
 
 export async function createServerSupabaseClient() {
   const cookieStore = await cookies();
-  const env = getPublicEnv();
+  const env = getServerPublicEnv();
 
   return createServerClient<Database>(
     env.NEXT_PUBLIC_SUPABASE_URL,

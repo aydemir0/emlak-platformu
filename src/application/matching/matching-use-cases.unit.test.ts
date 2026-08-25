@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import { refreshCustomerRequestMatches } from "@/application/matching/matching-use-cases";
 
@@ -28,6 +28,22 @@ const context = {
 };
 
 describe("matching application service", () => {
+  it.each([501, Number.MAX_SAFE_INTEGER])(
+    "rejects candidate limit %s before opening a transaction",
+    async (candidateLimit) => {
+      const transaction = vi.fn();
+
+      await expect(
+        refreshCustomerRequestMatches({ transaction }, context, {
+          customerRequestId: "request-1",
+          candidateLimit,
+        }),
+      ).rejects.toMatchObject({ code: "MATCHING_INPUT_INVALID" });
+
+      expect(transaction).not.toHaveBeenCalled();
+    },
+  );
+
   it("returns a PII-free, deterministic sorted projection", async () => {
     let persisted = false;
     const result = await refreshCustomerRequestMatches(

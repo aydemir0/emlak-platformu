@@ -247,6 +247,101 @@ describe("Postgres media pipeline", () => {
     ).resolves.toEqual([]);
   });
 
+  it("creates a new numbered attempt for each expired lease and terminalizes above the ceiling before storage", async () => {
+    const listing = await property();
+    const isolatedStorage = new DeterministicMediaStorage();
+    const bytes = await sharp({
+      create: { width: 20, height: 10, channels: 3, background: "yellow" },
+    })
+      .jpeg()
+      .toBuffer();
+    const media = await upload(listing.id, isolatedStorage, bytes);
+    await pool.query(
+      "update public.property_media set updated_at='1900-01-01T00:00:00Z' where id=$1",
+      [media.id],
+    );
+    const firstNow = new Date("2026-08-09T12:00:00Z");
+    const claimInput = {
+      workerId: "expired-worker-1",
+      leaseSeconds: 1,
+      recipeVersion: "property-v1",
+      processorVersion: "sharp-integration",
+      now: firstNow,
+    };
+
+    const first = await workerRepository.claimNext(claimInput);
+    const second = await workerRepository.claimNext({
+      ...claimInput,
+      workerId: "expired-worker-2",
+      now: new Date("2026-08-09T12:00:02Z"),
+    });
+    const third = await workerRepository.claimNext({
+      ...claimInput,
+      workerId: "expired-worker-3",
+      now: new Date("2026-08-09T12:00:04Z"),
+    });
+
+    expect([first, second, third]).toEqual([
+      expect.objectContaining({
+        mediaId: media.id,
+        attemptNumber: 1,
+        recoveredStaleLease: false,
+      }),
+      expect.objectContaining({
+        mediaId: media.id,
+        attemptNumber: 2,
+        recoveredStaleLease: true,
+      }),
+      expect.objectContaining({
+        mediaId: media.id,
+        attemptNumber: 3,
+        recoveredStaleLease: true,
+      }),
+    ]);
+
+    const storageGet = vi.spyOn(isolatedStorage, "get");
+    const processor = { process: vi.fn() };
+    await expect(
+      processNextMedia(workerRepository, isolatedStorage, processor, {
+        workerId: "expired-worker-4",
+        processorVersion: "sharp-integration",
+        maxAttempts: 3,
+        now: () => new Date("2026-08-09T12:00:06Z"),
+        correlationId: () => "40000000-0000-4000-8000-000000000004",
+      }),
+    ).resolves.toEqual({ outcome: "FAILED", mediaId: media.id });
+
+    expect(storageGet).not.toHaveBeenCalled();
+    expect(processor.process).not.toHaveBeenCalled();
+    const attempts = await pool.query(
+      `select attempt_number,status,error_code from public.media_processing_attempts
+       where property_media_id=$1 order by attempt_number`,
+      [media.id],
+    );
+    expect(attempts.rows).toEqual([
+      {
+        attempt_number: 1,
+        status: "FAILED",
+        error_code: "MEDIA_LEASE_EXPIRED",
+      },
+      {
+        attempt_number: 2,
+        status: "FAILED",
+        error_code: "MEDIA_LEASE_EXPIRED",
+      },
+      {
+        attempt_number: 3,
+        status: "FAILED",
+        error_code: "MEDIA_LEASE_EXPIRED",
+      },
+      {
+        attempt_number: 4,
+        status: "REJECTED",
+        error_code: "MEDIA_MAX_ATTEMPTS_EXCEEDED",
+      },
+    ]);
+  });
+
   it("serializes concurrent reorder commands and rejects the stale writer", async () => {
     const listing = await property();
     const bytes = await sharp({

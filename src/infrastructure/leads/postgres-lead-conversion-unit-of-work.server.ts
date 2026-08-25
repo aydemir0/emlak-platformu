@@ -10,7 +10,7 @@ import type {
   PersistedLeadConversion,
 } from "@/application/leads/convert-lead-to-customer";
 import type { ContactIdentity } from "@/domain/leads/lead-conversion-policy";
-import { getLocalDatabasePool } from "@/infrastructure/postgres/pool.server";
+import { getDatabasePool } from "@/infrastructure/postgres/pool.server";
 
 class PostgresLeadConversionTransaction implements LeadConversionTransaction {
   constructor(private readonly client: PoolClient) {}
@@ -243,7 +243,7 @@ class PostgresLeadConversionTransaction implements LeadConversionTransaction {
 }
 
 export class PostgresLeadConversionUnitOfWork implements LeadConversionUnitOfWork {
-  constructor(private readonly pool: Pool = getLocalDatabasePool()) {}
+  constructor(private readonly pool: Pool = getDatabasePool()) {}
 
   async transaction<T>(
     work: (tx: LeadConversionTransaction) => Promise<T>,
