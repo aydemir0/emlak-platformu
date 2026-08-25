@@ -835,3 +835,30 @@ before release:
 - Typecheck, type tests, lint, scoped document Prettier, and `git diff --check`
   pass before the Package A commit.
 - The branch is committed locally and is not pushed. Package B does not start.
+
+## Package E local implementation record, 2026-08-25
+
+Package E supplies only repository-side production wiring and local operational
+proof. Same-origin public media delivery serves validated immutable WebP/AVIF
+variants and denies private or malformed paths. Internal scheduled invocation
+requires a production `CRON_SECRET`, constant-time Bearer authentication, a
+canonical run ID, bounded aggregate results, and no browser/PII contract.
+Media processing is the only enabled composition; lead notifications,
+appointment reminders, reconciliation deletion, and maintenance fail closed
+before claiming work until their provider and owner decisions exist.
+
+Media reconciliation is dry-run by default and requires an explicit positive
+maximum before deletion. A clean local reset and 121 pgTAP assertions passed.
+An isolated application-schema restore proved 49 public tables, 24 private
+functions, 19 migration rows, RLS on all 49 public tables, and the appointment
+overlap constraint. Operations documents record extension/platform restore
+prerequisites, release order, worker controls, media delivery, telemetry/alert
+expectations, and incident response.
+
+Four deterministic Playwright release scenarios are read-only. Existing
+unit/integration and pgTAP suites remain authoritative for workflow invariants.
+Staging provider identities, real R2 CORS/delivery, notification recipients,
+Sentry retention/scrubbing, GA4 consent, alert destinations, production
+backup/PITR ownership, production-volume lock rehearsal, and controlled-write
+smoke are explicit Package F blockers. No provider, remote Supabase,
+deployment, or production resource was touched.

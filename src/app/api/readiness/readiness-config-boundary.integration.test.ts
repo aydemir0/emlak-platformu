@@ -25,6 +25,7 @@ const productionValues = {
   SUPABASE_SERVICE_ROLE_KEY: "server-only-service-role-key",
   LEAD_INTAKE_HMAC_SECRET:
     "lead-intake-test-secret-with-at-least-32-characters",
+  CRON_SECRET: "y".repeat(40),
   DATABASE_URL:
     "postgresql://app_user:database-password@db.internal:5432/app?sslmode=require",
 };

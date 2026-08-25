@@ -43,16 +43,20 @@ describe("media storage reconciliation", () => {
         limit: 10,
         now: new Date("2026-08-09T12:00:00Z"),
         graceSeconds: 3600,
+        deleteOrphans: true,
+        maximumDelete: 10,
       }),
-    ).resolves.toEqual({ inspected: 1, deleted: 1 });
+    ).resolves.toEqual({ inspected: 1, candidates: 1, deleted: 1 });
     await expect(
       reconcileMediaStorage(repo, storage, {
         prefix,
         limit: 10,
         now: new Date("2026-08-09T12:00:00Z"),
         graceSeconds: 3600,
+        deleteOrphans: true,
+        maximumDelete: 10,
       }),
-    ).resolves.toEqual({ inspected: 0, deleted: 0 });
+    ).resolves.toEqual({ inspected: 0, candidates: 0, deleted: 0 });
   });
 
   it("retains authoritative and grace-period objects", async () => {
@@ -83,6 +87,41 @@ describe("media storage reconciliation", () => {
         graceSeconds: 60,
       }),
     ).resolves.toMatchObject({ deleted: 0 });
+  });
+
+  it("defaults to dry-run and requires an explicit maximum before deleting", async () => {
+    const storage = new DeterministicMediaStorage(
+      new Date("2026-08-09T10:00:00Z"),
+    );
+    const bytes = new Uint8Array([1]);
+    await storage.put({
+      key,
+      bytes,
+      contentType: "image/webp",
+      checksumSha256: createHash("sha256").update(bytes).digest("hex"),
+      ifAbsent: true,
+    });
+
+    await expect(
+      reconcileMediaStorage(repository(false), storage, {
+        prefix,
+        limit: 10,
+        now: new Date("2026-08-09T12:00:00Z"),
+        graceSeconds: 60,
+      }),
+    ).resolves.toEqual({ inspected: 1, candidates: 1, deleted: 0 });
+    expect(await storage.head(key)).not.toBeNull();
+
+    await expect(
+      reconcileMediaStorage(repository(false), storage, {
+        prefix,
+        limit: 10,
+        now: new Date("2026-08-09T12:00:00Z"),
+        graceSeconds: 60,
+        deleteOrphans: true,
+        maximumDelete: 0,
+      }),
+    ).rejects.toThrow("MEDIA_VALIDATION_FAILED");
   });
 
   it("refuses arbitrary prefixes and unbounded batches", async () => {
@@ -205,6 +244,8 @@ describe("media storage reconciliation", () => {
         limit: 10,
         now: new Date("2026-08-09T12:00:00Z"),
         graceSeconds: 60,
+        deleteOrphans: true,
+        maximumDelete: 10,
         correlationId: "media-reconcile-storage-failure",
         reportRun: reporter,
       }),

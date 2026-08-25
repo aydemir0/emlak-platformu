@@ -24,10 +24,17 @@ export async function reconcileMediaStorage(
     limit: number;
     now: Date;
     graceSeconds: number;
+    deleteOrphans?: boolean;
+    maximumDelete?: number;
     correlationId?: string;
     reportRun?: WorkerRunReporter;
   }>,
-): Promise<{ inspected: number; deleted: number; cursor?: string }> {
+): Promise<{
+  inspected: number;
+  candidates: number;
+  deleted: number;
+  cursor?: string;
+}> {
   const startedAt = Date.now();
   const correlationId = input.correlationId ?? randomUUID();
   if (
@@ -38,7 +45,11 @@ export async function reconcileMediaStorage(
     input.limit <= 0 ||
     input.limit > 250 ||
     !Number.isSafeInteger(input.graceSeconds) ||
-    input.graceSeconds < 0
+    input.graceSeconds < 0 ||
+    (input.deleteOrphans === true &&
+      (!Number.isSafeInteger(input.maximumDelete) ||
+        (input.maximumDelete ?? 0) <= 0 ||
+        (input.maximumDelete ?? 0) > input.limit))
   ) {
     throw new ApplicationError(
       "MEDIA_VALIDATION_FAILED",
@@ -65,7 +76,17 @@ export async function reconcileMediaStorage(
       }
     }
     phase = "storage";
-    if (orphanKeys.length) await storage.delete(orphanKeys);
+    if (
+      input.deleteOrphans === true &&
+      orphanKeys.length > (input.maximumDelete ?? 0)
+    ) {
+      throw new ApplicationError(
+        "MEDIA_VALIDATION_FAILED",
+        "MEDIA_RECONCILIATION_DELETE_LIMIT",
+      );
+    }
+    const deleted = input.deleteOrphans === true ? orphanKeys.length : 0;
+    if (deleted > 0) await storage.delete(orphanKeys);
     emitWorkerRun(input.reportRun, {
       operation: "media.reconcile",
       correlationId,
@@ -79,7 +100,8 @@ export async function reconcileMediaStorage(
     });
     return {
       inspected: page.objects.length,
-      deleted: orphanKeys.length,
+      candidates: orphanKeys.length,
+      deleted,
       ...(page.cursor ? { cursor: page.cursor } : {}),
     };
   } catch (error) {

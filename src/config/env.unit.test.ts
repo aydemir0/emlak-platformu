@@ -26,6 +26,7 @@ const remoteDatabaseUrl =
 const sharedServerValues = {
   SUPABASE_SERVICE_ROLE_KEY: "server-only-service-role-key",
   LEAD_INTAKE_HMAC_SECRET: leadIntakeHmacSecret,
+  CRON_SECRET: "y".repeat(40),
 };
 
 const productionR2Values = {
@@ -382,6 +383,21 @@ describe("environment boundaries", () => {
         DATABASE_URL: remoteDatabaseUrl,
       }),
     ).toThrow("R2 configuration is required in production");
+  });
+
+  it("requires a scheduler secret in production and never invents a fallback", () => {
+    expect(() =>
+      parseServerEnv({
+        ...remotePublicValues,
+        ...sharedServerValues,
+        ...productionR2Values,
+        APP_ENV: "production",
+        APP_BASE_URL: "https://emlak.example.test",
+        APP_RELEASE: "release-1",
+        DATABASE_URL: remoteDatabaseUrl,
+        CRON_SECRET: undefined,
+      }),
+    ).toThrow("CRON_SECRET is required in production");
   });
 
   it("does not include database credentials in validation errors", () => {

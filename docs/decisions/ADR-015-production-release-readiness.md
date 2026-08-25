@@ -265,3 +265,21 @@ This ADR changes no schema or runtime behavior. Reversing it requires a new ADR
 that supplies equivalent release controls and explains how all P0 and P1 risks
 remain bounded. Future schema rollback must be decided per migration; this ADR
 does not authorize destructive reversal.
+
+## Package E implementation record
+
+Package E selects a same-origin application route for public R2 variant
+delivery, retaining a private bucket and immutable provider-independent object
+keys. It adds one authenticated HTTP scheduler boundary without selecting a
+scheduler platform. Only media processing is composed because its database,
+storage, processor, retry, and observability dependencies exist. Provider-
+dependent notification workers and destructive reconciliation stay disabled
+until approved dependencies and ownership exist; disabled work is never
+claimed or marked processed.
+
+The local backup rehearsal establishes that application recovery includes
+`public`, `private`, `auth`, and `supabase_migrations` plus extension
+prerequisites, while provider-owned schemas require the supported Supabase
+backup/PITR workflow. This evidence and the new runbooks improve recoverability
+without claiming production restore, provider, alert, or staging proof. Those
+external gates remain mandatory in Package F.

@@ -22,6 +22,8 @@ export default defineConfig({
           SUPABASE_SERVICE_ROLE_KEY: "server-only-key-for-playwright-smoke",
           LEAD_INTAKE_HMAC_SECRET:
             "lead-intake-playwright-secret-with-at-least-32-characters",
+          CRON_SECRET:
+            "scheduler-playwright-secret-with-at-least-32-characters",
           LOCAL_DATABASE_URL:
             "postgresql://postgres:postgres@127.0.0.1:55322/postgres",
         },

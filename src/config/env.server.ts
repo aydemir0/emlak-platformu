@@ -9,6 +9,7 @@ export { MATCHING_CANDIDATE_LIMIT_MAXIMUM } from "@/domain/matching/matching-pol
 
 const serviceRoleSchema = z.string().min(20);
 const leadHmacSecretSchema = z.string().min(32);
+const cronSecretSchema = z.string().min(32);
 const appEnvironmentSchema = z
   .enum(["local", "test", "preview", "production"])
   .default("local");
@@ -214,6 +215,19 @@ function parseR2Configuration(
     : null;
 }
 
+function parseCronSecret(
+  value: string | undefined,
+  appEnvironment: AppEnvironment,
+): string | undefined {
+  if (!value) {
+    if (appEnvironment === "production") {
+      throw new Error("CRON_SECRET is required in production");
+    }
+    return undefined;
+  }
+  return cronSecretSchema.parse(value);
+}
+
 function validateSupabaseResourceIdentity(
   supabaseUrl: string,
   appEnvironment: AppEnvironment,
@@ -267,6 +281,7 @@ export function parseServerReadinessEnv(
     LEAD_INTAKE_HMAC_SECRET: leadHmacSecretSchema.parse(
       values.LEAD_INTAKE_HMAC_SECRET,
     ),
+    CRON_SECRET: parseCronSecret(values.CRON_SECRET, appEnvironment),
     LEAD_RATE_LIMIT_MAX_ATTEMPTS: z.coerce
       .number()
       .int()
