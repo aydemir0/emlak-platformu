@@ -14,7 +14,7 @@
     "test": "npm run test:unit && npm run test:integration",
     "test:unit": "vitest run --config vitest.unit.config.ts",
     "test:integration": "vitest run --config vitest.integration.config.ts",
-    "test:e2e": "playwright test",
+    "test:e2e": "node run-playwright-e2e.mjs",
     "test:types": "tsc --noEmit --pretty false",
     "quality": "npm run lint && npm run format:check && npm run typecheck && npm test && npm run build"
   },

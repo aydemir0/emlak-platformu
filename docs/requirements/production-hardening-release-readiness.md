@@ -9,7 +9,7 @@ mutation.
 
 The audited baseline is `main` at
 `2b344273b0f642b6e5ff8eb947120f34e9756e94`. Evidence came from the checked-in
-application, all 18 migrations, database tests, generated types, GitHub Quality
+application, all 19 migrations, database tests, generated types, GitHub Quality
 workflow, configuration schemas, provider adapters, and operational
 documentation. Provider dashboards and production resources were not inspected;
 configuration described only in documents is not treated as wired.
@@ -699,14 +699,14 @@ cleanup evidence. A failed cleanup is an incident, not a reason to hide the test
 | GitHub/main protection   | Quality workflow exists                          | Required green checks, reviewed commit, protected merge/deploy authority.                                         |
 | Vercel application       | Documented only; no project/cron/runtime config  | Bound project/environment, Node/runtime limits, canonical domains, preview isolation, rollback owner.             |
 | Supabase Auth            | SSR integration and local config exist           | Production URL/key, redirect allowlist, signup policy, staff bootstrap/offboarding, AAL2 admin verification.      |
-| PostgreSQL               | 18 migrations/tests exist; runtime is local-only | Production TLS/pool config, migration rehearsal, backup/restore proof, post-migration RLS/grant/type checks.      |
+| PostgreSQL               | 19 migrations/tests exist; runtime is local-only | Production TLS/pool config, migration rehearsal, backup/restore proof, post-migration RLS/grant/type checks.      |
 | Cloudflare R2            | Storage/processing adapters exist                | Dedicated bucket, least-privilege key, CORS, private prefixes, delivery domain/rewrite, lifecycle/reconciliation. |
 | Resend                   | Not implemented                                  | Recipient semantics, provider account/domain, key/from policy, idempotent adapter, safe non-production sink.      |
 | GA4/internal analytics   | Schema/docs only                                 | Consent decision, event dictionary, PII review, environment separation, verification.                             |
 | Sentry/runtime logs      | Proposed docs and logger primitive only          | Approved sink, scrub rules, release/environment tags, alerts, retention/access owner.                             |
 | DNS/TLS/security headers | Not configured in repository                     | Canonical host, TLS, HSTS decision, CSP verification, redirect and certificate checks.                            |
 | Scheduler/workers        | No production entrypoints                        | Authenticated schedule, provider limits, concurrency, poison handling, dashboards, manual fallback.               |
-| Operations               | No runbooks                                      | Release, incident, backup/restore, worker, media, credential exposure, and rollback procedures.                   |
+| Operations               | Six scoped runbooks exist                        | Approve named owners, provider identities, alert routes, RPO/RTO, and release evidence.                           |
 
 ## Release order and rollback decision points
 
@@ -862,3 +862,29 @@ Sentry retention/scrubbing, GA4 consent, alert destinations, production
 backup/PITR ownership, production-volume lock rehearsal, and controlled-write
 smoke are explicit Package F blockers. No provider, remote Supabase,
 deployment, or production resource was touched.
+
+## Package F release-gate disposition, 2026-08-25
+
+Repository evidence, external approval, and environment proof are separate
+gates. A repository PASS does not assert that staging or production is wired.
+
+| Priority | Gate                                                                                                                                         | Disposition                                                                                                                                                               |
+| -------- | -------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P0       | CI-equivalent checks, RLS/grants, migration replay, generated types, build, required config guards, data integrity, critical security        | Repository proof is required from the final Package F pass; any failure blocks merge and release. Environment bindings and backup eligibility still require staged proof. |
+| P1       | Backup/restore owner, scheduler/provider owners, alert destination, RPO/RTO, production-volume migration rehearsal, controlled staging smoke | Open external release blockers. Named humans must approve them and staging/production evidence must be attached before deployment.                                        |
+| P2       | Non-critical UX or documentation follow-up                                                                                                   | May defer only with an owner and date; no P2 item weakens or substitutes for a P0/P1 control.                                                                             |
+
+| Remaining Package E item                    | Classification                           | Release treatment                                                                                                  |
+| ------------------------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------ |
+| Production-volume migration/lock proof      | STAGING/PRODUCTION VERIFICATION REQUIRED | P1 blocker until representative volume, lock duration, and maintenance-window evidence exist.                      |
+| Provider identities and owners              | EXTERNAL HUMAN DECISION                  | P1 blocker until exact Vercel, Supabase, R2, scheduler, notification, telemetry, and analytics owners are named.   |
+| Real R2 CORS verification                   | STAGING/PRODUCTION VERIFICATION REQUIRED | P0/P1 blocker until the approved origin can upload and private prefixes remain inaccessible.                       |
+| Alert destinations                          | EXTERNAL HUMAN DECISION                  | P1 blocker until actionable routes and responders are approved and tested.                                         |
+| RPO/RTO                                     | EXTERNAL HUMAN DECISION                  | P0/P1 blocker until targets, backup tier, PITR window, and accountable owner are approved.                         |
+| Controlled-write production smoke authority | EXTERNAL HUMAN DECISION                  | P1 blocker; no production write is permitted without separately approved records, recipients, window, and cleanup. |
+| E2E runner clean shutdown                   | RESOLVED IN REPO                         | The canonical runner owns shell-free child processes, waits on readiness, and performs bounded teardown.           |
+
+No external release risk has been silently accepted. Items marked P0/P1 above
+remain accepted release blockers in the sense that deployment must stop until
+their stated evidence closes them. Merging this PR does **not** authorize a
+production deployment.

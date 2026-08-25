@@ -20,3 +20,14 @@ Record immutable candidate SHA, approver, production resource identities, canoni
 Disable schedulers first. Roll back application traffic only when the prior version is compatible with the applied schema. Never roll back by dropping data-bearing schema under incident pressure. Use a reviewed forward migration for schema/data defects. Preserve R2 originals/quarantine and do not bulk-delete media. If authoritative data is corrupt, isolate traffic and follow backup restore; replay privacy tombstones before service resumes.
 
 Provider configuration is conditional: Resend, Sentry, and GA4 remain disabled until sender/recipient, retention/scrubbing, consent/event dictionary, environment isolation, and owner decisions are approved. Tests/build must never make provider calls or use real recipients.
+
+## Evidence boundary
+
+| Evidence class | What counts                                                                                          | What it does not authorize                            |
+| -------------- | ---------------------------------------------------------------------------------------------------- | ----------------------------------------------------- |
+| Repository     | Clean CI-equivalent checks, local reset/pgTAP/type repeatability, read-only E2E, reviewed runbooks   | Staging binding, production access, merge, or deploy  |
+| Staging        | Exact non-production resource identities, real R2 CORS/media, scheduler/provider, and alert checks   | Production identity, production writes, or traffic    |
+| Production     | Approved read-only checks and separately authorized controlled writes against named resources        | Broader mutation, destructive cleanup, or future runs |
+| Human approval | Named owners approve RPO/RTO, provider/alert identities, migration window, smoke scope, and go/no-go | Technical proof by itself or implied deploy authority |
+
+Repository completion and PR merge are not production deployment authorization.
