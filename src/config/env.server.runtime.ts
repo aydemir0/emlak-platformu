@@ -1,6 +1,7 @@
 import "server-only";
 
 import {
+  parseDatabaseReadinessEnv,
   parseRuntimeIdentity,
   parseServerEnv,
   parseServerPublicEnv,
@@ -50,6 +51,5 @@ export function getServerReadinessEnv() {
 }
 
 export function getDatabaseReadinessEnv() {
-  const { DATABASE_URL } = getServerReadinessEnv();
-  return { DATABASE_URL };
+  return parseDatabaseReadinessEnv(getRuntimeValues());
 }

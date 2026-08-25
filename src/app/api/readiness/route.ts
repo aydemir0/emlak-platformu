@@ -1,6 +1,6 @@
 import type { Pool } from "pg";
 
-import { getServerReadinessEnv } from "@/config/env.server.runtime";
+import { getDatabaseReadinessEnv } from "@/config/env.server.runtime";
 import { reportUnexpectedError } from "@/infrastructure/observability/runtime-observability.server";
 import { getDatabasePool } from "@/infrastructure/postgres/pool.server";
 import { createRequestContext } from "@/lib/request-context";
@@ -80,7 +80,7 @@ export async function GET(request: Request): Promise<Response> {
   const context = createRequestContext(request.headers);
 
   try {
-    getServerReadinessEnv();
+    getDatabaseReadinessEnv();
   } catch (error) {
     reportFailure(error, context.correlationId, "readiness.configuration");
     return readinessResponse(context, {

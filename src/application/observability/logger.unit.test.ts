@@ -95,7 +95,7 @@ describe("structured logger", () => {
   });
 
   it.each([
-    ["outcome", "synthetic-api-key-fixture-v1"],
+    ["outcome", "synthetic-api-key-redaction-fixture"],
     ["status", "synthetic-secret-redaction-fixture"],
     ["phase", "AKIAIOSFODNN7EXAMPLE"],
   ])("redacts common credential-shaped %s values", (key, value) => {

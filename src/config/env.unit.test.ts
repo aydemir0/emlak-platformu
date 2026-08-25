@@ -2,10 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import { parsePublicEnv } from "@/config/env.client";
 import {
+  parseDatabaseReadinessEnv,
   parseRuntimeIdentity,
   parseServerEnv,
   parseServerPublicEnv,
-  parseServerReadinessEnv,
 } from "@/config/env.server";
 
 const localPublicValues = {
@@ -26,7 +26,7 @@ const remoteDatabaseUrl =
 const sharedServerValues = {
   SUPABASE_SERVICE_ROLE_KEY: "server-only-service-role-key",
   LEAD_INTAKE_HMAC_SECRET: leadIntakeHmacSecret,
-  CRON_SECRET: "y".repeat(40),
+  CRON_SECRET: "x".repeat(40),
 };
 
 const productionR2Values = {
@@ -151,7 +151,7 @@ describe("environment boundaries", () => {
     });
   });
 
-  it("keeps R2 outside critical runtime readiness validation", () => {
+  it("keeps non-database config outside PostgreSQL readiness validation", () => {
     const withoutR2 = {
       ...remotePublicValues,
       ...sharedServerValues,
@@ -161,9 +161,13 @@ describe("environment boundaries", () => {
       DATABASE_URL: remoteDatabaseUrl,
     };
 
-    expect(parseServerReadinessEnv(withoutR2)).toMatchObject({
-      APP_ENV: "production",
-      APP_RELEASE: "461ca1b9d39f",
+    expect(
+      parseDatabaseReadinessEnv({
+        APP_ENV: "production",
+        DATABASE_URL: remoteDatabaseUrl,
+        LOCAL_DATABASE_URL: localDatabaseUrl,
+      }),
+    ).toEqual({
       DATABASE_URL: remoteDatabaseUrl,
     });
     expect(() => parseServerEnv(withoutR2)).toThrow(

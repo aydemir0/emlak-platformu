@@ -24,7 +24,7 @@ vi.mock("@/infrastructure/observability/runtime-observability.server", () => ({
 
 import { POST } from "@/app/api/internal/workers/[worker]/route";
 
-const secret = "y".repeat(40);
+const secret = "x".repeat(40);
 const runId = "40000000-0000-4000-8000-000000000004";
 
 function request(authorization?: string) {

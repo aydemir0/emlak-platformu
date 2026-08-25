@@ -2,13 +2,13 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 vi.mock("server-only", () => ({}));
 
-const { getDatabasePool, getServerReadinessEnv, query } = vi.hoisted(() => ({
+const { getDatabasePool, getDatabaseReadinessEnv, query } = vi.hoisted(() => ({
   getDatabasePool: vi.fn(),
-  getServerReadinessEnv: vi.fn(),
+  getDatabaseReadinessEnv: vi.fn(),
   query: vi.fn(),
 }));
 
-vi.mock("@/config/env.server.runtime", () => ({ getServerReadinessEnv }));
+vi.mock("@/config/env.server.runtime", () => ({ getDatabaseReadinessEnv }));
 vi.mock("@/infrastructure/postgres/pool.server", () => ({ getDatabasePool }));
 
 async function loadGet() {
@@ -18,7 +18,7 @@ async function loadGet() {
 describe("GET /api/readiness", () => {
   beforeEach(() => {
     vi.resetModules();
-    getServerReadinessEnv.mockReturnValue({ DATABASE_URL: "[redacted]" });
+    getDatabaseReadinessEnv.mockReturnValue({ DATABASE_URL: "[redacted]" });
     getDatabasePool.mockReturnValue({ query });
     query.mockResolvedValue({ rows: [{ ready: 1 }] });
   });
@@ -105,7 +105,7 @@ describe("GET /api/readiness", () => {
   });
 
   it("fails safely before database access when canonical config is invalid", async () => {
-    getServerReadinessEnv.mockImplementationOnce(() => {
+    getDatabaseReadinessEnv.mockImplementationOnce(() => {
       throw new Error("DATABASE_URL includes db.internal");
     });
     const GET = await loadGet();

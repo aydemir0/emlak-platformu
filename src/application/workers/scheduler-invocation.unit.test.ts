@@ -5,7 +5,7 @@ import {
   executeScheduledWorker,
 } from "@/application/workers/scheduler-invocation";
 
-const secret = "y".repeat(40);
+const secret = "x".repeat(40);
 
 describe("scheduler invocation boundary", () => {
   it("fails closed when the scheduler secret is missing or invalid", () => {

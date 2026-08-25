@@ -30,6 +30,7 @@ const matchingCandidateLimitSchema = z.coerce
 export type AppEnvironment = z.infer<typeof appEnvironmentSchema>;
 export type RuntimeIdentity = ReturnType<typeof parseRuntimeIdentity>;
 export type ServerPublicEnv = ReturnType<typeof parseServerPublicEnv>;
+export type DatabaseReadinessEnv = ReturnType<typeof parseDatabaseReadinessEnv>;
 export type ServerReadinessEnv = ReturnType<typeof parseServerReadinessEnv>;
 export type ServerEnv = ReturnType<typeof parseServerEnv>;
 
@@ -181,6 +182,20 @@ function parseDatabaseUrl(
   }
 
   return values.DATABASE_URL!;
+}
+
+export function parseDatabaseReadinessEnv(
+  values: Record<string, string | undefined>,
+) {
+  const appEnvironment = appEnvironmentSchema.parse(values.APP_ENV);
+  const activeDatabaseValues =
+    appEnvironment === "local" || appEnvironment === "test"
+      ? { ...values, DATABASE_URL: undefined }
+      : { ...values, LOCAL_DATABASE_URL: undefined };
+
+  return {
+    DATABASE_URL: parseDatabaseUrl(activeDatabaseValues, appEnvironment),
+  };
 }
 
 function parseR2Configuration(
