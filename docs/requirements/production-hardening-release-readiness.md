@@ -411,6 +411,32 @@ additional reliability work; Package E retains media delivery, scheduler,
 provider, telemetry, operations, and smoke wiring. These conditions continue to
 block release until their respective evidence exists.
 
+## Package D implementation record (local evidence, 2026-08-25)
+
+Package D closes only the measured database and reliability paths from the
+Package A/C audit. The public sitemap is split into deterministic 10,000-entry
+pages with a hard 1,000-page ceiling. Persisted matching reads fetch at most the
+approved 500-result budget plus one overflow sentinel, and generation writes
+batch all matches and reasons into one statement after the stale transition.
+Lead and appointment workers now reject batch sizes above 100 and leases outside
+one second through 15 minutes before claiming work. Feature stale triggers skip
+no-op updates while continuing to invalidate every authoritative value change.
+
+The lead abuse-window index is the only new index. On a rolled-back 100,000-row
+local distribution, the pre-index plan used `leads_public_intake_idx`, touched
+380 buffers, and executed in 2.041 ms. The measured partial composite index
+produced an index-only plan: 3 buffers/0.039 ms in the same comparison and 6
+buffers/0.033 ms after the clean migration reset. Its write cost is one narrow
+B-tree entry for each active lead carrying an abuse signal. Local reset,
+generated-type equality, pgTAP (121 assertions), focused unit/integration tests,
+and final application gates provide Package D evidence; no remote database was
+contacted.
+
+Package E still owns production migration/lock rehearsal, backup/restore proof,
+provider and scheduler wiring, media delivery, telemetry/alerts, smoke/E2E, and
+operations runbooks. Package D does not authorize deployment or production
+traffic.
+
 ## Media and R2 production requirements
 
 Current controls include a 15 MiB limit, JPEG/PNG/WebP allowlist, exact declared

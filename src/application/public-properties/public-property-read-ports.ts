@@ -27,5 +27,6 @@ export type PublicSitemapEntry = PublicPropertyCanonicalRoute &
 export interface PublicPropertyReadRepository {
   getByRoute(route: string): Promise<PublicRouteResolution>;
   list(query: PublicPropertyListQuery): Promise<PublicPropertyPage>;
-  listSitemapEntries(): Promise<readonly PublicSitemapEntry[]>;
+  countSitemapPages(): Promise<number>;
+  listSitemapEntries(page: number): Promise<readonly PublicSitemapEntry[]>;
 }

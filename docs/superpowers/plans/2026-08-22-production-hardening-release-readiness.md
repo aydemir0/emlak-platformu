@@ -352,6 +352,15 @@ Package D/E deferrals remain required; stop for approval before Package D.
 measured query plans, workload bounds, and worker recovery tests pass in an
 isolated environment. Stop for approval before Package E.
 
+**Package D local completion record (2026-08-25):** A clean local Supabase
+reset and 121 pgTAP assertions pass. The measured lead abuse-window index moves
+the representative query from 380 buffers/2.041 ms to an index-only plan at 3
+buffers/0.039 ms (6 buffers/0.033 ms after clean reset). Sitemap pages, matching
+result reads, matching generation writes, worker batch/lease inputs, and no-op
+stale invalidation are bounded with focused regressions. Production migration
+rehearsal and all provider/scheduler/smoke/operations proof remain Package E;
+no remote action is authorized.
+
 ---
 
 ## Package E: Production wiring and operational proof

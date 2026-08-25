@@ -183,6 +183,21 @@ the restricted/offline registry boundary. Package D/E work remains mandatory;
 no deployment, remote mutation, provider enablement, or final release approval
 is implied.
 
+## Package D implementation record
+
+Package D applies measured, local-only reliability changes without adding a
+cache, product capability, or infrastructure dependency. Sitemap and matching
+reads now have explicit overflow budgets; matching persistence batches the
+previous per-result/per-reason writes; worker claim batch/lease inputs are
+bounded; and no-op feature updates no longer amplify stale-match writes. The
+only new index is the query-plan-supported active lead abuse-window composite.
+
+The migration uses a short lock timeout and is reproducible through a clean
+local Supabase reset. Production index build method, populated-table lock
+rehearsal, backup/restore evidence, provider/scheduler wiring, smoke verification,
+and operational ownership remain Package E release gates. No Package D evidence
+authorizes a remote migration or deploy.
+
 ## Alternatives considered
 
 ### Release using documented provider defaults

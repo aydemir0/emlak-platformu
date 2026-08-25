@@ -1,6 +1,11 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(8);
+select extensions.plan(11);
+
+select extensions.has_index(
+  'public', 'leads', 'leads_abuse_network_created_at_idx',
+  'lead abuse window lookup has a selective active-row index'
+);
 
 insert into public.customers(id,display_name) values ('91000000-0000-4000-8000-000000000001','Matching TAP customer');
 insert into public.customer_requests(id,customer_id,status,listing_type_id,net_area_min)
@@ -22,6 +27,8 @@ insert into public.property_features(id,code,label,value_kind) values ('91000000
 insert into public.customer_request_features(customer_request_id,feature_id,priority) values ('91000000-0000-4000-8000-000000000002','91000000-0000-4000-8000-000000000007','required');
 select extensions.is((select status from public.property_customer_matches where id='91000000-0000-4000-8000-000000000006'),'STALE','request feature insert invalidates current matches');
 update public.property_customer_matches set status='PROPOSED' where id='91000000-0000-4000-8000-000000000006';
+update public.customer_request_features set priority=priority,value_text=value_text,value_number=value_number,value_boolean=value_boolean where customer_request_id='91000000-0000-4000-8000-000000000002';
+select extensions.is((select status from public.property_customer_matches where id='91000000-0000-4000-8000-000000000006'),'PROPOSED','request feature no-op update does not amplify stale writes');
 delete from public.customer_request_features where customer_request_id='91000000-0000-4000-8000-000000000002';
 select extensions.is((select status from public.property_customer_matches where id='91000000-0000-4000-8000-000000000006'),'STALE','request feature delete invalidates current matches');
 update public.property_customer_matches set status='PROPOSED' where id='91000000-0000-4000-8000-000000000006';
@@ -31,6 +38,8 @@ update public.property_customer_matches set status='PROPOSED' where id='91000000
 insert into public.property_feature_assignments(property_id,feature_id) values ('91000000-0000-4000-8000-000000000005','91000000-0000-4000-8000-000000000007');
 select extensions.is((select status from public.property_customer_matches where id='91000000-0000-4000-8000-000000000006'),'STALE','property feature insert invalidates current matches');
 update public.property_customer_matches set status='PROPOSED' where id='91000000-0000-4000-8000-000000000006';
+update public.property_feature_assignments set value_text=value_text,value_number=value_number,value_boolean=value_boolean where property_id='91000000-0000-4000-8000-000000000005' and feature_id='91000000-0000-4000-8000-000000000007';
+select extensions.is((select status from public.property_customer_matches where id='91000000-0000-4000-8000-000000000006'),'PROPOSED','property feature no-op update does not amplify stale writes');
 update public.property_feature_assignments set value_boolean=true where property_id='91000000-0000-4000-8000-000000000005' and feature_id='91000000-0000-4000-8000-000000000007';
 select extensions.is((select status from public.property_customer_matches where id='91000000-0000-4000-8000-000000000006'),'STALE','property feature update invalidates current matches');
 update public.property_customer_matches set status='PROPOSED' where id='91000000-0000-4000-8000-000000000006';

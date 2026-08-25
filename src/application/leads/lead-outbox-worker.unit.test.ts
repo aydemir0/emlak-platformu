@@ -200,6 +200,18 @@ describe("lead outbox worker", () => {
     ).rejects.toThrow("WORKER_RETRY_POLICY_INVALID");
   });
 
+  it("rejects unbounded batch and lease values before claiming work", async () => {
+    const repository = new FakeRepository();
+
+    await expect(
+      processLeadOutboxBatch(
+        repository,
+        { notification: async () => {}, analytics: async () => {} },
+        { ...options, limit: 101, leaseMs: 900_001 },
+      ),
+    ).rejects.toThrow("WORKER_EXECUTION_POLICY_INVALID");
+  });
+
   it("reports a safe dependency category when claiming fails", async () => {
     const claimError = new Error(
       "postgres://user:password@db.internal/customer@example.test",

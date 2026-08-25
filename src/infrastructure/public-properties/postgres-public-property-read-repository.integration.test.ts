@@ -284,8 +284,9 @@ describe("Postgres public property read repository", () => {
     expect(result.items.every((item) => item.media.length === 1)).toBe(true);
   });
 
-  it("lists only current publicly eligible canonical sitemap entries", async () => {
-    const entries = await repository.listSitemapEntries();
+  it("lists only one bounded page of current canonical sitemap entries", async () => {
+    await expect(repository.countSitemapPages()).resolves.toBeGreaterThan(0);
+    const entries = await repository.listSitemapEntries(0);
     const paths = entries.map((entry) => entry.path);
 
     expect(paths).toEqual(

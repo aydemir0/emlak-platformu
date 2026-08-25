@@ -185,6 +185,18 @@ describe("appointment reminder outbox", () => {
     expect(JSON.stringify(summary)).not.toContain("customer@example.test");
   });
 
+  it("rejects unbounded batch and lease values before claiming work", async () => {
+    const repo = new Repo();
+
+    await expect(
+      processAppointmentReminderBatch(
+        repo,
+        { notify: async () => {} },
+        { ...options, limit: 101, leaseMs: 900_001 },
+      ),
+    ).rejects.toThrow("WORKER_EXECUTION_POLICY_INVALID");
+  });
+
   it("does not claim success after a concurrent lease loss and reports once", async () => {
     const repo = new Repo();
     const leaseError = new WorkerLeaseLostError(

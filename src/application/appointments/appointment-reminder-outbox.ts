@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  assertWorkerRetryPolicy,
+  assertWorkerExecutionPolicy,
   emitWorkerRun,
   EMPTY_WORKER_FAILURE_CATEGORIES,
   type WorkerRunReporter,
@@ -62,7 +62,7 @@ export async function processAppointmentReminderBatch(
     reportRun?: WorkerRunReporter;
   }>,
 ): Promise<WorkerRunSummary> {
-  assertWorkerRetryPolicy(options.maxAttempts, options.retryDelayMs);
+  assertWorkerExecutionPolicy(options);
   const startedAt = Date.now();
   let messages: AppointmentReminderMessage[] = [];
   let succeeded = 0;

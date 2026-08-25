@@ -4,7 +4,7 @@ import {
   type LeadOutboxConsumers,
 } from "@/application/leads/lead-outbox";
 import {
-  assertWorkerRetryPolicy,
+  assertWorkerExecutionPolicy,
   emitWorkerRun,
   EMPTY_WORKER_FAILURE_CATEGORIES,
   type WorkerRunReporter,
@@ -71,7 +71,7 @@ export async function processLeadOutboxBatch(
     reportRun?: WorkerRunReporter;
   }>,
 ): Promise<WorkerRunSummary> {
-  assertWorkerRetryPolicy(options.maxAttempts, options.retryDelayMs);
+  assertWorkerExecutionPolicy(options);
   const startedAt = Date.now();
   let messages: ClaimedLeadOutboxMessage[] = [];
   let succeeded = 0;
