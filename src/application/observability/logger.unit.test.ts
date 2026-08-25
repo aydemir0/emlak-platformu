@@ -96,7 +96,7 @@ describe("structured logger", () => {
 
   it.each([
     ["outcome", "synthetic-api-key-fixture-v1"],
-    ["status", "synthetic-sensitive-status-fixture-v1"],
+    ["status", "synthetic-secret-redaction-fixture"],
     ["phase", "AKIAIOSFODNN7EXAMPLE"],
   ])("redacts common credential-shaped %s values", (key, value) => {
     const records: LogRecord[] = [];
